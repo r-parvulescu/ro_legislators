@@ -408,7 +408,7 @@ def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, mu
         # if there was a party switch, only include pre-switch years (switch year inclusive); if not, include all years
         for pers_yr in person:
             if party_switch_year:
-                if int(pers_yr[2]) <= party_switch_year:
+                if int(pers_yr[3]) <= party_switch_year:
                     first_switch_risk_set_table.append(pers_yr)
             else:
                 first_switch_risk_set_table.append(pers_yr)
