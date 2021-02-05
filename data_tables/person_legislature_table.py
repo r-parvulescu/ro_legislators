@@ -8,6 +8,10 @@ from zipfile import ZipFile
 import tempfile
 import os
 import csv
+import re
+import operator
+import itertools
+import helpers
 
 
 def make_parliamentarians_legislature_table(zip_archive_path, outdir):
@@ -45,17 +49,23 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     parl_leg_table = []
     # bang all the person-legislatures together
     for idx, parl in enumerate(parliamentarians):
-        row = ['', str(idx), parl["legislature"], parl["chamber"], parl["surnames"], parl["given names"],
-               parl["mandate start"], parl["mandate end"], parl["entry party"], parl["first party switch month"],
-               parl["first party switch year"]]
+        row = [0, idx, parl["legislature"], parl["chamber"], parl["constituency"], parl["surnames"],
+               parl["given names"], parl["mandate start"], parl["mandate end"], parl["deceased in office"],
+               parl["entry party name"], parl["entry party code"],
+               parl["first party switch month"], parl["first party switch year"]]
 
         parl_leg_table.append(row)
 
     assign_unique_person_ids(parl_leg_table)
+    parl_leg_table = seniority(parl_leg_table)
+
+    # deduplicate the table; e.g. SILAGHI Ovidiu Ioan for 2012-2016 appears twice in the data, for whatever reason
+    parl_leg_table = helpers.deduplicate_list_of_lists(parl_leg_table)
 
     # write output table to disk
-    header = ["PersID", "PersLegID", "legislature", "chamber", "surnames", "given names", "mandate start",
-              "mandate end", "entry party", "first party switch month", "first party switch year"]
+    header = ["PersID", "PersLegID", "legislature", "chamber", "constituency", "surnames", "given names",
+              "mandate start", "mandate end", "death status", "entry party name", "entry party code",
+              "first party switch month", "first party switch year", "seniority"]
     with open(outdir + 'parliamentarians_party_switch_table.csv', 'w') as out_f:
         writer = csv.writer(out_f)
         writer.writerow(header)
@@ -78,11 +88,15 @@ def extract_parliamentarian_info(html_text):
     surnames, given_names = get_names(soup)
     legislature = get_legislature(soup)
     chamber = get_chamber(soup)
+    constituency = get_constituency(soup)
     mandate_start, mandate_end = get_mandate(soup)
-    entry_party, first_party_switch = get_party_name_and_first_switch(soup)
+    deceased_in_office = get_deceased_in_office(soup)
+    entry_party, entry_party_code, first_party_switch = get_party_and_first_switch(soup)
 
-    return {"legislature": legislature, "chamber": chamber, "surnames": surnames, "given names": given_names,
-            "mandate start": mandate_start, "mandate end": mandate_end, "entry party": entry_party,
+    return {"legislature": legislature, "chamber": chamber, "constituency": constituency, "surnames": surnames,
+            "given names": given_names, "mandate start": mandate_start, "mandate end": mandate_end,
+            "deceased in office": deceased_in_office,
+            "entry party name": entry_party, "entry party code": entry_party_code,
             "first party switch month": first_party_switch["month"],
             "first party switch year": first_party_switch["year"]}
 
@@ -173,6 +187,77 @@ def get_chamber(soup):
     return chamber
 
 
+def get_constituency(soup):
+    """
+    Identifies the constituency (county, really) which the parliamentarian represents.
+
+    :param soup: a BeautifulSoup object
+    :return: str, the name of the constituency
+    """
+
+    # due to the gradual introduction of Ilfov county in the 1990s the numbering of counties differs in 1990-1992,
+    # 1992-1996 & 1996-2000, and 2000 onward
+    const_dict_1990 = {1: "ALBA", 2: "ARAD", 3: "ARGEŞ", 4: "BACĂU", 5: "BIHOR", 6: "BISTRIŢA-NĂSĂUD", 7: "BOTOŞANI",
+                       8: "BRAŞOV", 9: "BRĂILA", 10: "BUZĂU", 11: "CARAŞ-SEVERIN", 12: "CĂLĂRAŞI", 13: "CLUJ",
+                       14: "CONSTANŢA", 15: "COVASNA", 16: "DÂMBOVIŢA", 17: "DOLJ", 18: "GALAŢI", 19: "GIURGIU",
+                       20: "GORJ", 21: "HARGHITA", 22: "HUNEDOARA", 23: "IALOMIŢA", 24: "IAŞI",
+                       25: "MARAMUREŞ", 26: "MEHEDINŢI", 27: "MUREŞ", 28: "NEAMŢ", 29: "OLT", 30: "PRAHOVA",
+                       31: "SATU MARE", 32: "SĂLAJ", 33: "SIBIU", 34: "SUCEAVA", 35: "TELEORMAN", 36: "TIMIŞ",
+                       37: "TULCEA", 38: "VASLUI", 39: "VÂLCEA", 40: "VRANCEA", 41: "BUCUREŞTI"}
+
+    const_dict_1992_96 = {1: "ALBA", 2: "ARAD", 3: "ARGEŞ", 4: "BACĂU", 5: "BIHOR", 6: "BISTRIŢA-NĂSĂUD", 7: "BOTOŞANI",
+                          8: "BRAŞOV", 9: "BRĂILA", 10: "BUZĂU", 11: "CARAŞ-SEVERIN", 12: "CĂLĂRAŞI", 13: "CLUJ",
+                          14: "CONSTANŢA", 15: "COVASNA", 16: "DÂMBOVIŢA", 17: "DOLJ", 18: "GALAŢI", 19: "GIURGIU",
+                          20: "GORJ", 21: "HARGHITA", 22: "HUNEDOARA", 23: "IALOMIŢA", 24: "IAŞI",
+                          25: "MARAMUREŞ", 26: "MEHEDINŢI", 27: "MUREŞ", 28: "NEAMŢ", 29: "OLT", 30: "PRAHOVA",
+                          31: "SATU MARE", 32: "SĂLAJ", 33: "SIBIU", 34: "SUCEAVA", 35: "TELEORMAN", 36: "TIMIŞ",
+                          37: "TULCEA", 38: "VASLUI", 39: "VÂLCEA", 40: "VRANCEA", 41: "BUCUREŞTI", 42: "ILFOV"}
+
+    # Ilfov county was created in 1997, so the numbers after "Iaşi" incremented by one thereafter
+    const_dict_2000 = {1: "ALBA", 2: "ARAD", 3: "ARGEŞ", 4: "BACĂU", 5: "BIHOR", 6: "BISTRIŢA-NĂSĂUD", 7: "BOTOŞANI",
+                       8: "BRAŞOV", 9: "BRĂILA", 10: "BUZĂU", 11: "CARAŞ-SEVERIN", 12: "CĂLĂRAŞI", 13: "CLUJ",
+                       14: "CONSTANŢA", 15: "COVASNA", 16: "DÂMBOVIŢA", 17: "DOLJ", 18: "GALAŢI", 19: "GIURGIU",
+                       20: "GORJ", 21: "HARGHITA", 22: "HUNEDOARA", 23: "IALOMIŢA", 24: "IAŞI", 25: "ILFOV",
+                       26: "MARAMUREŞ", 27: "MEHEDINŢI", 28: "MUREŞ", 29: "NEAMŢ", 30: "OLT", 31: "PRAHOVA",
+                       32: "SATU MARE", 33: "SĂLAJ", 34: "SIBIU", 35: "SUCEAVA", 36: "TELEORMAN", 37: "TIMIŞ",
+                       38: "TULCEA", 39: "VASLUI", 40: "VÂLCEA", 41: "VRANCEA", 42: "BUCUREŞTI", 43: "DIASPORA"}
+
+    constituency_text = soup.find('p').text
+    if "la nivel" in constituency_text:
+        # these are national minority representatives in the lower house, who are voted for one, national constituency
+        return "MINORITĂŢI"
+    else:
+        # the constituency code is the first occurence in the string of the form "nr.DIGITS", where the digits range
+        # from 1 to 43. Codes uniquely map to constituency names
+        constituency_code = int(re.search("(?<=nr\.)[0-9]+", constituency_text)[0])
+        # error out if getting nonsensical codes
+        if not 1 <= constituency_code <= 43:
+            print(constituency_text)
+            raise ValueError("NONSENSICAL CODE ERROR")
+        legislature = get_legislature(soup)
+        if legislature == "1990-1992":
+            return const_dict_1990[constituency_code]
+        elif legislature in {"1992-1996", "1996-2000"}:
+            return const_dict_1992_96[constituency_code]
+        else:
+            return const_dict_2000[constituency_code]
+
+
+def get_deceased_in_office(soup):
+    """
+    Identifies whether a parliamentarian died in office.
+
+    :param soup: a BeautifulSoup object
+    :return: str, "deceased in office" or "no death in office"
+    """
+
+    mandate_text = soup.find('p').text
+    if "decedat" in mandate_text:
+        return "deceased in office"
+    else:
+        return "no death in office"
+
+
 def get_mandate(soup):
     """
     Returns the beginning and end of a parliamentarian's mandate. Mandates differ in length because some
@@ -190,14 +275,14 @@ def get_mandate(soup):
     legislature = get_legislature(soup)
     leg_start, leg_end = int(legislature.split('-')[0]), legislature.split('-')[1]
 
-    # by default mandates end in December of election year and begin in January of subsequent year; set day to first
-    # of month; exceptions are first two post-communist legislatures
-    if legislature == "1990-1992":  # first exception is
+    # by default mandates end in December of election year and begin in January of subsequent year; set day to November
+    # 30th and December 1st; exceptions are first two post-communist legislatures
+    if legislature == "1990-1992":  # first exception is; these are default values, i.e. when
         mandate_start, mandate_end = "1990-06-01", "1992-08-01"
-    elif legislature == "1992-1996":
+    elif legislature == "1992-1996":  # the second exception is
         mandate_start, mandate_end = "1992-10-01", "1996-01-01"
     else:
-        mandate_start, mandate_end = str(leg_start + 1) + "-01-01", leg_end + "-12-01"
+        mandate_start, mandate_end = str(leg_start) + "-12-01", leg_end + "-11-30"
 
     mandate_info = soup.find('div', class_="boxDep clearfix").contents[2].text
     if "validarii:" in mandate_info:
@@ -211,15 +296,10 @@ def get_mandate(soup):
         month = ro_months[month]
         mandate_end = '-'.join([year, month, day])
 
-    # one ad-hoc problem with SILAGHI Ovidiu Ioan, who for some reason is registered twice in the same year
-    surnames, given_names = get_names(soup)
-    if surnames == "SILAGHI" and given_names == "Ovidiu Ioan" and legislature == "2012-2016":
-        mandate_start, mandate_end = "default", "default"
-
     return mandate_start, mandate_end
 
 
-def get_party_name_and_first_switch(soup):
+def get_party_and_first_switch(soup):
     party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social Democrat",
                    "PNL": "Partidul Naţional Liberal", "PDSR": "Partidul Democraţiei Sociale din România",
                    "PNTCD": "Partidul Naţional Ţărănesc Creştin Democrat", "PD": "Partidul Democrat",
@@ -242,14 +322,14 @@ def get_party_name_and_first_switch(soup):
                          'aug': '08', 'sep': '09', 'oct': '10', 'noi': '11', 'dec': '12'}
 
     # get the name of the party with which they entered parliament, and the date of the first party switch
-    entry_party = ''
+    entry_party_name, entry_party_code = '', ''
     first_switch_date = {"month": '', "year": ''}
 
     info_fields = soup.find_all('div', class_="boxDep clearfix")
     for i in info_fields:
 
         if "minoritatilor nationale" in i.contents[0].text:
-            entry_party = 'minorities'
+            entry_party_name, entry_party_code = 'minorities', 'MIN'
 
         if "Formatiunea politica" in i.contents[0].text:
             for j in i.contents:
@@ -272,40 +352,42 @@ def get_party_name_and_first_switch(soup):
                     # now get the party name
                     for p_code in party_codes:
                         if p_code in split_by_departures[0]:
-                            entry_party = party_codes[p_code]
+                            entry_party_name, entry_party_code = party_codes[p_code], p_code
 
                     # covers for bugs related to "PD" also being found in other party names
-                    if entry_party == 'Partidul Democrat' and 'PDSR' in split_by_departures[0]:
-                        entry_party = "Partidul Democraţiei Sociale din România"
-                    if entry_party == 'Partidul Democrat' and 'PDAR' in split_by_departures[0]:
-                        entry_party = "Partidul Democrat Agrar din România"
+                    if entry_party_name == 'Partidul Democrat' and 'PDSR' in split_by_departures[0]:
+                        entry_party_name, entry_party_code = "Partidul Democraţiei Sociale din România", "PDSR"
+                    if entry_party_name == 'Partidul Democrat' and 'PDAR' in split_by_departures[0]:
+                        entry_party_name, entry_party_code = "Partidul Democrat Agrar din România", "PDAR"
 
     # cover for bugs related to party name changes
 
     # "FDSN" rebranded as "PDSR" in 1993 and
-    if entry_party == 'Frontul Democrat al Salvarii Nationale':
+    if entry_party_name == 'Frontul Democrat al Salvarii Nationale':
+        if first_switch_date and first_switch_date['year'] == '1993':
+            first_switch_date = {"month": '', "year": ''}
+
+    # FSN became PD in 1993
+    if entry_party_name == 'Frontul Salvării Naţionale':
         if first_switch_date and first_switch_date['year'] == '1993':
             first_switch_date = {"month": '', "year": ''}
 
     # "PDSR" rebranded as to "PSD" in 2001
-    if entry_party == 'Partidul Democraţiei Sociale din România':
+    if entry_party_name == 'Partidul Democraţiei Sociale din România':
         if first_switch_date and first_switch_date['year'] == '2001':
-            first_switch_date = {"month": '', "year": ''}
-
-    # FSN became PD in 1993
-    if entry_party == 'Frontul Salvării Naţionale':
-        if first_switch_date and first_switch_date['year'] == '1993':
             first_switch_date = {"month": '', "year": ''}
 
     # run the data past the ad-hoc party name and switch corrector
     surnames, given_names = get_names(soup)
     legislature = get_legislature(soup)
-    entry_party, first_switch_date = ad_hoc_party_names_and_switches(surnames, given_names, legislature,
-                                                                     entry_party, first_switch_date)
-    return entry_party, first_switch_date
+    entry_party_name, entry_party_code, first_switch_date = adhoc_party_and_switches(surnames, given_names,
+                                                                                     legislature, entry_party_name,
+                                                                                     entry_party_code,
+                                                                                     first_switch_date)
+    return entry_party_name, entry_party_code, first_switch_date
 
 
-def ad_hoc_party_names_and_switches(surnames, given_names, legislature, entry_party, first_switch_date):
+def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_name, entry_party_code, first_switch_date):
     """
     In some legislatures some parliamentarians have unusually formatted profiles regarding party names and switches.
     This function catches and corrects that unusualness.
@@ -313,72 +395,91 @@ def ad_hoc_party_names_and_switches(surnames, given_names, legislature, entry_pa
     :param surnames: str
     :param given_names: str
     :param legislature: str
-    :param entry_party: str
+    :param entry_party_name: str
+    :param entry_party_code: str
     :param first_switch_date: dict of form {"month": '', "year": ''}
     :return: correct entry party and first switch date
     """
 
     if surnames == "IORGOVAN" and given_names == "Antonie" and legislature == '1990-1992':
-        entry_party, first_switch_date = "independent", {"month": '', "year": ''}
+        entry_party_name, entry_party_code, first_switch_date = "independent", "IND", {"month": '', "year": ''}
 
     if surnames == "CAJAL" and given_names == "Nicolae" and legislature == '1990-1992':
-        entry_party, first_switch_date = "independent", {"month": '', "year": ''}
+        entry_party_name, entry_party_code, first_switch_date = "independent", "IND", {"month": '', "year": ''}
 
     if surnames == "BONDARIU" and given_names == "Ionel" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Democraţiei Sociale din România", {"month": "12", "year": "1995"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Democraţiei Sociale din România", "PDSR", \
+                                                                {"month": "12", "year": "1995"}
 
     if surnames == "BOLD" and given_names == "Ion" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Naţional Ţărănesc Creştin Democrat", {"month": "12", "year": "1994"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Naţional Ţărănesc Creştin Democrat", \
+                                                                "PNŢCD", {"month": "12", "year": "1994"}
 
     if surnames == "DRĂGHIEA" and given_names == "Nicolae" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Democraţiei Sociale din România", {"month": "02", "year": "1995"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Democraţiei Sociale din România", "PDSR", \
+                                                                {"month": "02", "year": "1995"}
 
     if surnames == "PASCU" and given_names == "Horia Radu" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Liberal 1993", {"month": "09", "year": "1993"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Liberal 1993", "PL'93", \
+                                                                {"month": "09", "year": "1993"}
 
     if surnames == "CERVENI" and given_names == "Niculae" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Liberal 1993", {"month": "09", "year": "1993"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Liberal 1993", "PL'93", \
+                                                                {"month": "09", "year": "1993"}
 
     if surnames == "TĂNASIE" and given_names == "Petru" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Democraţiei Sociale din România", {"month": "02", "year": "1996"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Democraţiei Sociale din România", "PDSR", \
+                                                                {"month": "02", "year": "1996"}
 
     if surnames == "HRISTU" and given_names == "Ion" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul România Mare", {"month": "04", "year": "1993"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul România Mare", "PRM", \
+                                                                {"month": "04", "year": "1993"}
 
     if surnames == "VINTILESCU" and given_names == "Teodor" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Liberal 1993", {"month": "02", "year": "1994"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Liberal 1993", "PL'93", \
+                                                                {"month": "02", "year": "1994"}
 
     if surnames == "RĂBAN" and given_names == "Grigore" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Socialist al Muncii", {"month": "02", "year": "1995"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Socialist al Muncii", "PSM", \
+                                                                {"month": "02", "year": "1995"}
 
     if surnames == "MÂNDROVICEANU" and given_names == "Vasile" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Liberal 1993", {"month": "03", "year": "1995"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Liberal 1993", "PL'93", \
+                                                                {"month": "03", "year": "1995"}
 
     if surnames == "JECAN" and given_names == "Aurel" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Unităţi Naţionale a Românilor", {"month": "09", "year": "1996"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Unităţi Naţionale a Românilor", "PUNR", \
+                                                                {"month": "09", "year": "1996"}
 
     if surnames == "URSU" and given_names == "Doru Viorel" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Democrat", {"month": "03", "year": "1995"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Democrat", "PD", \
+                                                                {"month": "03", "year": "1995"}
 
     if surnames == "ŢURLEA" and given_names == "Petre" and legislature == '1992-1996':
-        entry_party, first_switch_date = "Partidul Democraţiei Sociale din România", {"month": "09", "year": "1993"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Democraţiei Sociale din România", "PDSR", \
+                                                                {"month": "09", "year": "1993"}
 
     if surnames == "COŞEA" and given_names == "Dumitru Gheorghe Mircea" and legislature == '2004-2008':
-        entry_party, first_switch_date = "Partidul Naţional Liberal", {"month": "02", "year": "2008"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Naţional Liberal", "PNL", \
+                                                                {"month": "02", "year": "2008"}
 
     if surnames == "TODIRAŞCU" and given_names == "Valeriu" and legislature == "2012-2016":
-        entry_party, first_switch_date = "Partidul Democrat Liberal", {"month": "02", "year": "2015"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Democrat Liberal", "PDL", \
+                                                                {"month": "02", "year": "2015"}
 
     if surnames == "CERNEA" and given_names == "Remus Florinel" and legislature == "2012-2016":
-        entry_party, first_switch_date = "Partidul Social Democrat", {"month": "05", "year": "2013"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Social Democrat", "PSD", \
+                                                                {"month": "05", "year": "2013"}
 
     if surnames == "SILAGHI" and given_names == "Ovidiu Ioan" and legislature == "2012-2016":
-        entry_party, first_switch_date = "Partidul Naţional Liberal", {"month": "07", "year": "2014"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Naţional Liberal", "PNL", \
+                                                                {"month": "07", "year": "2014"}
 
     if surnames == "OPREA" and given_names == "Dumitru" and legislature == "2012-2016":
-        entry_party, first_switch_date = "Partidul Democrat Liberal", {"month": "02", "year": "2015"}
+        entry_party_name, entry_party_code, first_switch_date = "Partidul Democrat Liberal", "PDL", \
+                                                                {"month": "02", "year": "2015"}
 
-    return entry_party, first_switch_date
+    return entry_party_name, entry_party_code, first_switch_date
 
 
 def assign_unique_person_ids(parl_leg_table):
@@ -386,7 +487,7 @@ def assign_unique_person_ids(parl_leg_table):
     Goes through a table of parliamentarian-legislatures and assigns each person (and their associated mandates)
     one unique ID.
 
-    NB: there are two "POPO Virigil" in the 1996-2000 legislature with nothing to distinguish them as far as these
+    NB: there are two "POP Virigil" in the 1996-2000 legislature with nothing to distinguish them as far as these
     data are concerned (same party, neither switches, same mandates) so I leave these two merged. Nothing can be done.
 
     :param parl_leg_table: table (as list of lists) of parliamentarian-legislature, where each parl-leg is a row
@@ -394,12 +495,11 @@ def assign_unique_person_ids(parl_leg_table):
     """
 
     # assign person-level ID's
-    unique_full_names = {row[4] + ' ' + row[5] for row in parl_leg_table}
-    unique_person_ids = {ufn: str(idx) for idx, ufn in enumerate(unique_full_names)}
+    unique_full_names = {row[5] + ' ' + row[6] for row in parl_leg_table}  # row[5] == surname, row[6] == given name
+    unique_person_ids = {ufn: idx for idx, ufn in enumerate(unique_full_names)}
     for parl_leg in parl_leg_table:
 
-        parl_full_name = parl_leg[4] + ' ' + parl_leg[5]
-
+        parl_full_name = parl_leg[5] + ' ' + parl_leg[6]
         if parl_full_name in unique_person_ids:
 
             # some people have identical full names, but different legislatures; handle
@@ -412,3 +512,25 @@ def assign_unique_person_ids(parl_leg_table):
 
         else:
             print(parl_full_name, " NOT IN FULLNAME SET, ERROR, CHECK")
+
+
+def seniority(parl_leg_table):
+    """
+    Add a column at the end of the parliamentarian-legislature table which indicates seniority. A seniority of "1" means
+    that this is the first legislature that said parliamentarian served in, "2" means the second legislature, etc.
+
+    :param parl_leg_table: a table (as list of lists) where rows are parliamentarian-legislatures (i.e. info on one
+                           parliamentarian in one legislature)
+    :return: a parl_leg table where the last column indicates seniorty
+    """
+
+    # sort person-legislatures by unique ID and legislature, then group people by unique ID
+    parl_leg_table.sort(key=operator.itemgetter(0, 2))  # row[0] == person ID, row[2] == legislature
+    people = [person for key, [*person] in itertools.groupby(parl_leg_table, key=operator.itemgetter(0))]
+
+    table_with_seniority_column = []
+    for person in people:
+        for idx, pers_leg in enumerate(person):
+            # add the seniority column at the end; 1-indexed
+            table_with_seniority_column.append(pers_leg + [idx + 1])
+    return table_with_seniority_column
