@@ -269,7 +269,7 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
     const_col_idx, s_party_col_idx = header.index("constituency"), header.index("entry party code")
     p_switch_yr_col_idx, died_col_idx = header.index("first party switch year"), header.index("death status")
 
-    person_year_table_header = ["person_id", "legis", "legis_clock", "year", "one_legis_parl" "senate", "constit",
+    person_year_table_header = ["person_id", "legis", "legis_clock", "year", "one_legis_parl", "senate", "constit",
                                 "h_region", "senior", "senior_cat", "start_party", "p_size", "p_ethnic", "p_pers",
                                 "p_govt", "p_switch1", "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
                                 "lead_conv_multi_year", "min_conv_full", "min_conv_old", "min_conv_new",
