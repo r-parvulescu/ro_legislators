@@ -13,6 +13,24 @@ import operator
 import itertools
 import helpers
 
+party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social Democrat",
+               "PNL": "Partidul Naţional Liberal", "PDSR": "Partidul Democraţiei Sociale din România",
+               "PNTCD": "Partidul Naţional Ţărănesc Creştin Democrat", "PD": "Partidul Democrat",
+               "PDL": "Partidul Democrat Liberal", "UDMR": "Uniunea Democrată Maghiară din România",
+               "PP DD": "Partidul Poporului - Dan Diaconescu", "MER": "Mişcarea Ecologistă din România",
+               "PC": "Partidul Conservator", "PRM": "Partidul România Mare", "PER": "Partidul Ecologist Român",
+               "PUR SL": "Partidul Social Umanist din România (social liberal)", "USR": "Uniunea Salvaţi România",
+               "PNL CD": "Partidul Naţional Liberal - Convenţia Democrată", "PSM": "Partidul Socialist al Muncii",
+               "FDSN": "Frontul Democrat al Salvarii Nationale", "PUNR": "Partidul Unităţi Naţionale a Românilor",
+               "PMP": "Partidul Mişcarea Populară", "ALDE": "Alianţa Liberalior şi Democraţilor",
+               "PDAR": "Partidul Democrat Agrar din România", "PAC": "Partidul Alianţei Civice",
+               "PL'93": "Partidul Liberal 1993", "GDC": "Gruparea Democratică de Centru",
+               "PTLDR": "Partidul Tineretului Liber Democrat din România", "ULB": 'Uniunea Liberală "Brătianu"',
+               "AUR": "Alianţa pentru Unitatea Românilor", "PRNR": "Partidul Reconstrucţiei Naţionale din România",
+               "PLS": "Partidul Liber Schimbist", "FER": "Federaţia Ecologistă Română",
+               "PAR": "Partidul Alternativa României", "UNPR": "Uniunea Națională pentru Progresul României",
+               "FC": "Forţa Civică"}
+
 
 def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     """
@@ -29,7 +47,6 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     :param outdir: directory in which we dump the parliamentarian-legislature table
     :return: None
     """
-
     parliamentarians = []
 
     # work in memory: unzip data files into tempdir, extract data, temp directory gone after use
@@ -51,7 +68,7 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     for idx, parl in enumerate(parliamentarians):
         row = [0, idx, parl["legislature"], parl["chamber"], parl["constituency"], parl["surnames"],
                parl["given names"], parl["mandate start"], parl["mandate end"], parl["deceased in office"],
-               parl["entry party name"], parl["entry party code"],
+               parl["entry party name"], parl["entry party code"], parl["destination party code"],
                parl["first party switch month"], parl["first party switch year"]]
 
         parl_leg_table.append(row)
@@ -65,7 +82,7 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     # write output table to disk
     header = ["PersID", "PersLegID", "legislature", "chamber", "constituency", "surnames", "given names",
               "mandate start", "mandate end", "death status", "entry party name", "entry party code",
-              "first party switch month", "first party switch year", "seniority"]
+              "destination party code", "first party switch month", "first party switch year", "seniority"]
     with open(outdir + 'parliamentarians_party_switch_table.csv', 'w') as out_f:
         writer = csv.writer(out_f)
         writer.writerow(header)
@@ -82,7 +99,6 @@ def extract_parliamentarian_info(html_text):
     :param html_text: str, html.text of parliamentarian profile site
     :return: dict with desired data per parliamentarian-legislature
     """
-
     soup = BeautifulSoup(html_text, 'html.parser')
 
     surnames, given_names = get_names(soup)
@@ -91,12 +107,13 @@ def extract_parliamentarian_info(html_text):
     constituency = get_constituency(soup)
     mandate_start, mandate_end = get_mandate(soup)
     deceased_in_office = get_deceased_in_office(soup)
-    entry_party, entry_party_code, first_party_switch = get_party_and_first_switch(soup)
+    entry_party, entry_party_code, first_party_switch, dest_party_code = get_party_and_first_switch(soup)
 
     return {"legislature": legislature, "chamber": chamber, "constituency": constituency, "surnames": surnames,
             "given names": given_names, "mandate start": mandate_start, "mandate end": mandate_end,
             "deceased in office": deceased_in_office,
             "entry party name": entry_party, "entry party code": entry_party_code,
+            "destination party code": dest_party_code,
             "first party switch month": first_party_switch["month"],
             "first party switch year": first_party_switch["year"]}
 
@@ -116,7 +133,7 @@ def get_names(soup):
 
 def ad_hoc_name_corrector(surnames, given_names):
     """
-    Catches a bunch of ad-hoc given name mistakes, mostly to do with higher functions (e.g. treasurement of the
+    Catches a bunch of ad-hoc given name mistakes, mostly to do with higher functions (e.g. treasurer of the
     lower house of parliament).
 
     :param surnames:str, all letters uppercase
@@ -264,7 +281,6 @@ def get_mandate(soup):
     join parliament after elections (since they replace a retiree) while some retire before the end of their term.
 
     :param soup: a BeautifulSoup object
-    :
     :return: a tuple of two strings, first is mandate start, second is mandate end, each in format YEAR-MONTH-DAY
     """
 
@@ -300,23 +316,17 @@ def get_mandate(soup):
 
 
 def get_party_and_first_switch(soup):
-    party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social Democrat",
-                   "PNL": "Partidul Naţional Liberal", "PDSR": "Partidul Democraţiei Sociale din România",
-                   "PNTCD": "Partidul Naţional Ţărănesc Creştin Democrat", "PD": "Partidul Democrat",
-                   "PDL": "Partidul Democrat Liberal", "UDMR": "Uniunea Democrată Maghiară din România",
-                   "PP DD": "Partidul Poporului - Dan Diaconescu", "MER": "Mişcarea Ecologistă din România",
-                   "PC": "Partidul Conservator", "PRM": "Partidul România Mare", "PER": "Partidul Ecologist Român",
-                   "PUR SL": "Partidul Social Umanist din România (social liberal)", "USR": "Uniunea Salvaţi România",
-                   "PNL CD": "Partidul Naţional Liberal - Convenţia Democrată", "PSM": "Partidul Socialist al Muncii",
-                   "FDSN": "Frontul Democrat al Salvarii Nationale", "PUNR": "Partidul Unităţi Naţionale a Românilor",
-                   "PMP": "Partidul Mişcarea Populară", "ALDE": "Alianţa Liberalior şi Democraţilor",
-                   "PDAR": "Partidul Democrat Agrar din România", "PAC": "Partidul Alianţei Civice",
-                   "PL'93": "Partidul Liberal 1993", "GDC": "Gruparea Democratică de Centru",
-                   "PTLDR": "Partidul Tineretului Liber Democrat din România", "ULB": 'Uniunea Liberală "Brătianu"',
-                   "AUR": "Alianţa pentru Unitatea Românilor", "PRNR": "Partidul Reconstrucţiei Naţionale din România",
-                   "PLS": "Partidul Liber Schimbist", "FER": "Federaţia Ecologistă Română",
-                   "PAR": "Partidul Alternativa României", "UNPR": "Uniunea Națională pentru Progresul României",
-                   "FC": "Forţa Civică"}
+    """
+    Identifies the party on whose ticket a legislator was elected, and if that legislator switches parties, it also
+    identifies the month and year of that switch and receiving party.
+
+    NB: this only considers the first party switch, NOT multiple switches.
+
+    :param soup: a BeautifulSoup object
+    :return: a 4-tuple of strings: entry party name, entry party code, first switch date, and destination party code
+    """
+
+    dest_party_name, dest_party_code = "", ""
 
     short_month_codes = {'ian': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mai': '05', 'iun': '06', 'iul': '07',
                          'aug': '08', 'sep': '09', 'oct': '10', 'noi': '11', 'dec': '12'}
@@ -334,11 +344,11 @@ def get_party_and_first_switch(soup):
         if "Formatiunea politica" in i.contents[0].text:
             for j in i.contents:
                 if 'Tag' in str(type(j)) and ':' not in j.text:
-
                     party_group_text = j.text.replace('\xa0', '').replace('\r', '').replace('\n', '').replace('-', ' ')
                     split_by_departures = party_group_text.split('până în')
 
-                    # sometimes parties simply change names -- ignore these
+                    # sometimes parties simply change names -- ignore these; the form of the text string from which
+                    # we extract the date is "  iun. 2001PSD Partidul Social Democrat  din  iun. 2001"
                     if len(split_by_departures) > 1 and 'se transforma' not in split_by_departures[1]:
                         departure_date = split_by_departures[1].strip()
 
@@ -349,7 +359,9 @@ def get_party_and_first_switch(soup):
 
                         first_switch_date = {'month': departure_month, 'year': departure_year}
 
-                    # now get the party name
+                        dest_party_name, dest_party_code = destination_party_name(split_by_departures)
+
+                    # get the start party name
                     for p_code in party_codes:
                         if p_code in split_by_departures[0]:
                             entry_party_name, entry_party_code = party_codes[p_code], p_code
@@ -365,17 +377,24 @@ def get_party_and_first_switch(soup):
     # "FDSN" rebranded as "PDSR" in 1993 and
     if entry_party_name == 'Frontul Democrat al Salvarii Nationale':
         if first_switch_date and first_switch_date['year'] == '1993':
-            first_switch_date = {"month": '', "year": ''}
+            first_switch_date, dest_party_code = {"month": '', "year": ''}, ""
 
     # FSN became PD in 1993
     if entry_party_name == 'Frontul Salvării Naţionale':
         if first_switch_date and first_switch_date['year'] == '1993':
-            first_switch_date = {"month": '', "year": ''}
+            first_switch_date, dest_party_code = {"month": '', "year": ''}, ""
 
     # "PDSR" rebranded as to "PSD" in 2001
     if entry_party_name == 'Partidul Democraţiei Sociale din România':
         if first_switch_date and first_switch_date['year'] == '2001':
-            first_switch_date = {"month": '', "year": ''}
+            first_switch_date, dest_party_code = {"month": '', "year": ''}, ""
+
+    # if the origin and destination party are the same, blank out the destination party and switching
+    # NB: this plows over cases where a legislator left their party only to return; this is interesting but rare
+    #      behaviour (max 32 people) so I just treat it as "did not switch," which is true, if a bit simplistic
+    if dest_party_code:
+        if entry_party_code == dest_party_code:
+            first_switch_date,  dest_party_code = {"month": '', "year": ''}, ""
 
     # run the data past the ad-hoc party name and switch corrector
     surnames, given_names = get_names(soup)
@@ -384,7 +403,60 @@ def get_party_and_first_switch(soup):
                                                                                      legislature, entry_party_name,
                                                                                      entry_party_code,
                                                                                      first_switch_date)
-    return entry_party_name, entry_party_code, first_switch_date
+    return entry_party_name, entry_party_code, first_switch_date, dest_party_code
+
+
+def destination_party_name(split_by_departures):
+    """
+    This script extracts the name of the destination party, when a parliamentarian has switched parties. Often, for
+    both political and book-keeping reasons, a parliamentarian is marked as switching from their starting party to
+    "independent" and only then go on to join another party. In this case I assume that the destination party is the
+    first party AFTER the "independent" stint, therefore assuming that (regardless of duration) the party-switcher was
+    never REALLY independent, but that that status was a political and/or bookkeeping illusion. In this format the only
+    geniune independents are those that remain in that category and never end up joining another party.
+
+    NB: two ways of marking independents is the word "independent" or "Fără adeziune la formaţiunea politică pentru
+        care a candidat la alegeri", meaning "not affiliated with the party for whom they ran at the last election."
+
+    :param split_by_departures: list, a string split by the month of the switch/departure date. For example,
+                                ['PNL Partidul Naţional Liberal  ', '  dec. 2006independent  din  dec. 2006  ',
+                                '  feb. 2008PDL Partidul Democrat Liberal  din  feb. 2008']
+    :return: tuple, the destination party fullname and its code/acronym. In the example above it would be ("Partidul
+             Democrat Liberal", "PDL")
+    """
+
+    entry_party_name, entry_party_code = "", ""
+
+    # if the second entry "independent"
+    if "independent" in split_by_departures[1] or "adeziune" in split_by_departures[1]:
+
+        # if that parliamentarian never joined another party then they remained a genuine independent legislator
+        if len(split_by_departures) == 2:
+            entry_party_name, entry_party_code = "independent", "IND"
+
+        # else, there's a party after their stint as independent: that's the destination party
+        # the format is "feb. 2010PDL Partidul Democrat Liberal  din  feb. 2010"
+        else:
+            for p_code in party_codes:
+                if p_code in split_by_departures[2]:
+                    entry_party_name, entry_party_code = party_codes[p_code], p_code
+                    # covers for bugs related to "PD" also being found in other party names (viz. "PDSR" and "PDAR")
+                    if entry_party_name == 'Partidul Democrat' and 'PDSR' in split_by_departures[2]:
+                        entry_party_name, entry_party_code = "Partidul Democraţiei Sociale din România", "PDSR"
+                    if entry_party_name == 'Partidul Democrat' and 'PDAR' in split_by_departures[2]:
+                        entry_party_name, entry_party_code = "Partidul Democrat Agrar din România", "PDAR"
+
+    else:  # else, we're dealing with straight switches that didn't go through some "independent" phase
+        for p_code in party_codes:
+            if p_code in split_by_departures[1]:
+                entry_party_name, entry_party_code = party_codes[p_code], p_code
+                # covers for bugs related to "PD" also being found in other party names (viz. "PDSR" and "PDAR")
+                if entry_party_name == 'Partidul Democrat' and 'PDSR' in split_by_departures[1]:
+                    entry_party_name, entry_party_code = "Partidul Democraţiei Sociale din România", "PDSR"
+                if entry_party_name == 'Partidul Democrat' and 'PDAR' in split_by_departures[1]:
+                    entry_party_name, entry_party_code = "Partidul Democrat Agrar din România", "PDAR"
+
+    return entry_party_name, entry_party_code
 
 
 def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_name, entry_party_code, first_switch_date):
