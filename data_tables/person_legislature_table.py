@@ -12,7 +12,7 @@ import re
 import operator
 import itertools
 import helpers
-from data_tables.destination_ind_dict import destination_ind_dict
+from data_tables.dicts.destination_ind_dict import destination_ind_dict
 
 party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social Democrat",
                "PNL": "Partidul Naţional Liberal", "PDSR": "Partidul Democraţiei Sociale din România",
@@ -31,6 +31,9 @@ party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social De
                "PLS": "Partidul Liber Schimbist", "FER": "Federaţia Ecologistă Română",
                "PAR": "Partidul Alternativa României", "UNPR": "Uniunea Națională pentru Progresul României",
                "FC": "Forţa Civică"}
+
+short_month_codes = {'ian': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mai': '05', 'iun': '06', 'iul': '07',
+                     'aug': '08', 'sep': '09', 'oct': '10', 'noi': '11', 'dec': '12'}
 
 
 def make_parliamentarians_legislature_table(zip_archive_path, outdir):
@@ -69,8 +72,8 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     for idx, parl in enumerate(parliamentarians):
         row = [0, idx, parl["legislature"], parl["chamber"], parl["constituency"], parl["surnames"],
                parl["given names"], parl["mandate start"], parl["mandate end"], parl["deceased in office"],
-               parl["entry party name"], parl["entry party code"], parl["destination party code"],
-               parl["first party switch month"], parl["first party switch year"]]
+               parl["entry party name"], parl["entry party code"], parl["entry ppg rank"], parl["entry ppg rank dates"],
+               parl["destination party code"], parl["first party switch month"], parl["first party switch year"]]
 
         parl_leg_table.append(row)
 
@@ -83,6 +86,7 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     # write output table to disk
     header = ["PersID", "PersLegID", "legislature", "chamber", "constituency", "surnames", "given names",
               "mandate start", "mandate end", "death status", "entry party name", "entry party code",
+              "entry ppg rank", "entry ppg rank dates",
               "destination party code", "first party switch month", "first party switch year", "seniority"]
     with open(outdir + 'parliamentarians_person_legislature_table.csv', 'w') as out_f:
         writer = csv.writer(out_f)
@@ -109,11 +113,13 @@ def extract_parliamentarian_info(html_text):
     mandate_start, mandate_end = get_mandate(soup)
     deceased_in_office = get_deceased_in_office(soup)
     entry_party, entry_party_code, first_party_switch, dest_party_code = get_party_and_first_switch(soup)
+    ppg1_rank, ppg1_dates = get_rank_in_first_ppg(soup, mandate_start, mandate_end, surnames, given_names)
 
     return {"legislature": legislature, "chamber": chamber, "constituency": constituency, "surnames": surnames,
             "given names": given_names, "mandate start": mandate_start, "mandate end": mandate_end,
             "deceased in office": deceased_in_office,
             "entry party name": entry_party, "entry party code": entry_party_code,
+            "entry ppg rank": ppg1_rank, "entry ppg rank dates": ppg1_dates,
             "destination party code": dest_party_code,
             "first party switch month": first_party_switch["month"],
             "first party switch year": first_party_switch["year"]}
@@ -328,9 +334,6 @@ def get_party_and_first_switch(soup):
     """
 
     dest_party_name, dest_party_code = "", ""
-
-    short_month_codes = {'ian': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mai': '05', 'iun': '06', 'iul': '07',
-                         'aug': '08', 'sep': '09', 'oct': '10', 'noi': '11', 'dec': '12'}
 
     # get the name of the party with which they entered parliament, and the date of the first party switch
     entry_party_name, entry_party_code = '', ''
@@ -568,6 +571,89 @@ def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_nam
             destination_party_code = destination_ind_dict[legislature][fullname]
 
     return entry_party_name, entry_party_code, first_switch_date, destination_party_code
+
+
+def get_rank_in_first_ppg(soup, mandate_start, mandate_end, surnames, given_names):
+    """
+    Returns the rank that a legislator held within their first parliamentary party group, and the span of time in which
+    they held this rank. The ranks are "membru", "secretar", "vicelider" and "lider", in increasing order.
+
+    :param soup: a BeautifulSoup object
+    :param mandate_start: str, the beginning of a mandate, comes in YR-MO-DAY format
+    :param mandate_end: str, the end of a mandate, comes in YR-MO-DAY format
+    :param surnames: str
+    :param given_names: str
+    :return: a 2-tuple of string (rank, date range the rank was held)
+    """
+
+    # TODO: this ignores if there are second rank-holdings in the same first-party stint. So E.g. Ovidiu Gant in
+    #       2012-2016 was vicelider twice without changing parties (but vicelider was interrupted). This code counts
+    #       only the first occurence. NEED TO FIX THIS
+
+    # mandate boundaries come in YR-MO-DAY format, but we need MO.YR
+    m_start = mandate_start.split("-")[1] + "." + mandate_start.split("-")[0]
+    m_end = mandate_end.split("-")[1] + "." + mandate_end.split("-")[0]
+
+    # the default rank is a simple member, and the default date range is start and end of mandate
+    # NB: somewhat deceptive default since the rank is only first rank of first party, but mandate may include mutiple
+    #     rank and party changes
+    rank, date_range = "membru", m_start + "-" + m_end
+
+    # turns out that a couple of legislators from 1990-1996 was never registered in any caucus; return default values
+    if (surnames == "MOLDOVAN" and given_names == "Constantin") \
+            or (surnames == "MOŢIU" and given_names == "Adrian Ovidiu") \
+            or (surnames == "CEONTEA" and given_names == "Radu") \
+            or (surnames == "CAZIMIR" and given_names == "Ştefan"):
+        return rank, date_range
+
+    # where information lives in the html
+    info_fields = soup.find_all('div', class_="boxDep clearfix")
+    for i in info_fields:
+        # drill down to the field containing PPG info
+        if "Grupul parlamentar" in i.contents[0].text:
+            ppg1_info = i.find_all('tr')[0]  # focus only on first PPG, hence 0 index
+            ppg1_text = ppg1_info.text.replace('\xa0', '').replace('\r', '').replace('\n', '').replace('-', ' ')  # tidy
+
+            high_ranks = {"Secretar", "Vicelider", "Lider"}
+
+            for hr in high_ranks:
+                if hr in ppg1_text:  # isolate higher ranks
+
+                    # since date range information is after the rank name, split the string on the rank
+
+                    # if the last entry is empty, then the person had high rank for all of their time in said party,
+                    if not ppg1_text.split(hr)[-1]:
+                        date_range = m_start + "-" + m_end
+
+                    else:  # else their rank for only a portion of their time in the first party
+                        # case 1: they had the rank from one date until another
+                        if "din" in ppg1_text.split(hr)[-1] and "până" in ppg1_text.split(hr)[-1]:
+                            date_range = ppg1_text.split(hr)[-1].replace("din", '').replace("până în", "-").replace(" ", "")
+                        # case 2: held the rank from a certain date until the end of their stay in the first party
+                        elif "din" in ppg1_text.split(hr)[-1]:
+                            date_range = ppg1_text.split(hr)[-1].replace("din", '').replace(" ", "") + "-" + m_end
+                        #  case 3: held the rank from the start of their time in the first party until a certain date
+                        else:
+                            date_range = m_start + "-" + ppg1_text.split(hr)[-1].replace("până în", '').replace(" ", "")
+
+                    # replace the short month code (e.g. "aug") with its number correspondent (e.g. "08")
+                    for smc in short_month_codes:
+                        if smc in date_range:
+                            date_range = date_range.replace(smc, short_month_codes[smc])
+
+                    # the base data don't always put a period between month and year, so you can get"052016"; fix this
+                    # for the start period
+                    date_range = date_range[:2] + "." + date_range[2:] if "." not in date_range[:3] else date_range
+                    # for the end period
+                    date_range = date_range[:-4] + "." + date_range[-4:] if date_range[-5] != "." else date_range
+
+                    rank = hr.lower()  # set the rank
+
+                    # ensure that missing period issue is solved: format MO.YR-MO.YR must have two periods
+                    if date_range.count(".") != 2:
+                        raise ValueError("INCORRENT DATE RANGE FORMAT")
+
+    return rank, date_range
 
 
 def assign_unique_person_ids(parl_leg_table):
