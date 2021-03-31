@@ -6,8 +6,8 @@ Romanian parliament, with an eye on the causes of a first party switch.
 import csv
 import operator
 import itertools
-from data_tables.conviction_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, min_conv_old, \
-                                         min_conv_new, min_conv_none
+from data_tables.dicts.conviction_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
+    min_conv_old, min_conv_new, min_conv_none
 
 """
 NB: not enough variance to see if timing of loss of parliamentary caucus group affects timing of party switch
@@ -258,22 +258,23 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
         header = pers_leg_table[0]
         pers_leg_table = pers_leg_table[1:]  # skip the header
 
-    # get the set of all people (via IDs) who were only in one legislature, i.e. never returned
-    ids = {pers_leg[0]: 0 for pers_leg in pers_leg_table}
+    # see how many legislatures each person was ultimately in, i.e. how long their political career was across elections
+    career_lens = {pers_leg[0]: 0 for pers_leg in pers_leg_table}
     for pers_leg in pers_leg_table:
-        ids[pers_leg[0]] += 1
+        career_lens[pers_leg[0]] += 1
 
     mandate_start_col_idx, mandate_end_col_idx = header.index("mandate start"), header.index("mandate end")
     pid_col_idx, seniority_col_idx = header.index("PersID"), header.index("seniority")
     leg_col_idx, chamb_col_idx = header.index("legislature"), header.index("chamber")
     const_col_idx, s_party_col_idx = header.index("constituency"), header.index("entry party code")
     p_switch_yr_col_idx, died_col_idx = header.index("first party switch year"), header.index("death status")
+    dest_party_col_idx = header.index("destination party code")
 
-    person_year_table_header = ["person_id", "legis", "legis_clock", "year", "one_legis_parl", "senate", "constit",
+    person_year_table_header = ["person_id", "legis", "legis_clock", "year", "multi_legis_parl", "senate", "constit",
                                 "h_region", "senior", "senior_cat", "start_party", "p_size", "p_ethnic", "p_pers",
-                                "p_govt", "p_switch1", "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
-                                "lead_conv_multi_year", "min_conv_full", "min_conv_old", "min_conv_new",
-                                "min_conv_none"]
+                                "p_govt", "p_switch1", "p_dest", "elect_year", "lead_change", "leave_early",
+                                "lead_conv_one_year", "lead_conv_multi_year", "min_conv_full", "min_conv_old",
+                                "min_conv_new", "min_conv_none"]
 
     pers_yr_table = []
 
@@ -287,8 +288,8 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
             # look only at post-2000 legislatures (TODO fill in data for previous legislatures too)
             if pers_leg[leg_col_idx] in {"2000-2004", "2004-2008", "2008-2012", "2012-2016", "2016-2020"}:
 
-                # see whether that was a single-legislature parliamentarian
-                one_legis_parl = 1 if ids[pers_leg[0]] < 2 else 0
+                # see whether this is, ultimately, a multi-legislature parliamentarian
+                multi_legis_parl = 1 if career_lens[pers_leg[0]] > 1 else 0
 
                 # get the number of years that the parliamentarian served in a particular legislature
                 # NB: since elections are typically in Nov/Dec, mandates usually start in December. Ignore that first
@@ -332,6 +333,8 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                     leader_change = 1 if yr in party_leader_changes and s_party in party_leader_changes[yr] else 0
                     leave_early = 1 if yr == last_year_in_leg and last_month_in_leg <= 5 else 0
 
+                    dest_party = pers_leg[dest_party_col_idx] if party_switch else ""
+
                     # leader conviction columns
                     lead_conv_one_yr = 0
                     if yr in leader_conv_one_year and s_party in leader_conv_one_year[yr]:
@@ -358,9 +361,9 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                     if yr in min_conv_none and s_party in min_conv_none[yr]:
                         min_conv_no = min_conv_none[yr][s_party]
 
-                    person_year = [pid, leg, legis_clock, yr, one_legis_parl, senate, const, h_reg, senior,
+                    person_year = [pid, leg, legis_clock, yr, multi_legis_parl, senate, const, h_reg, senior,
                                    seniority_cat, s_party, s_party_size, s_party_ethnic, s_personality_party, govt,
-                                   party_switch, elec_yr, leader_change, leave_early, lead_conv_one_yr,
+                                   party_switch, dest_party, elec_yr, leader_change, leave_early, lead_conv_one_yr,
                                    lead_conv_multi_yr, min_conv_f, min_conv_o, min_conv_n, min_conv_no]
 
                     pers_yr_table.append(person_year)
@@ -372,6 +375,20 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header)
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header, multi_year_only=True)
+
+
+def former_switcher(parl_leg_table):
+    """
+    For legislators that have served more than one term, add a column indicating if they switched parties in a previous
+    mandate. In particular, "1" means that they switched in the mandate immediately before this one, "2" that they
+    switched parties during two mandates (notwithstanding how close they are to the current) and "0" means that they
+    never switched parties.
+
+    :param parl_leg_table: a table (as list of lists) where rows are parliamentarian-legislatures (i.e. info on one
+                           parliamentarian in one legislature)
+    :return: a parl_leg table where the last column indicates whether and how a legislator is a former switcher
+    """
+    pass
 
 
 def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, multi_year_only=False):
@@ -400,18 +417,23 @@ def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, mu
     for person in people:
         if multi_year_only and len(person) < 2:
             continue
-        # find the year, if any, in which the person switched parties
-        party_switch_year = ''
-        for pers_yr in person:
-            if int(pers_yr[15]) == 1:  # row[15] = party switch binary (1 = first party switch)
-                party_switch_year = int(pers_yr[3])
-        # if there was a party switch, only include pre-switch years (switch year inclusive); if not, include all years
-        for pers_yr in person:
-            if party_switch_year:
-                if int(pers_yr[3]) <= party_switch_year:
+
+        # now group the person by legislature; # row[1] = legislature
+        pers_legs = [p_leg for key, [*p_leg] in itertools.groupby(person, key=operator.itemgetter(1))]
+
+        for p_leg in pers_legs:
+            # find the year, if any, in which the person switched parties
+            party_switch_year = ''
+            for pers_yr in p_leg:
+                if int(pers_yr[15]) == 1:  # row[15] = party switch binary (1 = first party switch)
+                    party_switch_year = int(pers_yr[3])
+            # if there was a party switch, only include pre-switch years (switch year inclusive)
+            for pers_yr in p_leg:
+                if party_switch_year:
+                    if int(pers_yr[3]) <= party_switch_year:
+                        first_switch_risk_set_table.append(pers_yr)
+                else:
                     first_switch_risk_set_table.append(pers_yr)
-            else:
-                first_switch_risk_set_table.append(pers_yr)
 
     with open(risk_set_table_out_path, 'w') as out_f:
         writer = csv.writer(out_f)
