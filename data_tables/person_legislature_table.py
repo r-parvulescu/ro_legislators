@@ -12,6 +12,7 @@ import re
 import operator
 import itertools
 import helpers
+from data_tables.destination_dict import destination_ind_dict
 
 party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social Democrat",
                "PNL": "Partidul Naţional Liberal", "PDSR": "Partidul Democraţiei Sociale din România",
@@ -399,10 +400,17 @@ def get_party_and_first_switch(soup):
     # run the data past the ad-hoc party name and switch corrector
     surnames, given_names = get_names(soup)
     legislature = get_legislature(soup)
-    entry_party_name, entry_party_code, first_switch_date = adhoc_party_and_switches(surnames, given_names,
-                                                                                     legislature, entry_party_name,
-                                                                                     entry_party_code,
-                                                                                     first_switch_date)
+    corrected_switch_data = adhoc_party_and_switches(surnames, given_names, legislature, entry_party_name,
+                                                     entry_party_code, dest_party_code, first_switch_date)
+    entry_party_name, entry_party_code, first_switch_date, dest_party_code = corrected_switch_data
+
+    # PD rebranded as PDL after they absorbed a faction of the PNL in 2008; I standardise it all to "PDL" for ease,
+    # though this is an anachronism
+    if entry_party_code == "PD":
+        entry_party_code = "PDL"
+    if dest_party_code == "PD":
+        dest_party_code = "PDL"
+
     return entry_party_name, entry_party_code, first_switch_date, dest_party_code
 
 
@@ -459,7 +467,8 @@ def destination_party_name(split_by_departures):
     return entry_party_name, entry_party_code
 
 
-def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_name, entry_party_code, first_switch_date):
+def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_name, entry_party_code,
+                             destination_party_code, first_switch_date):
     """
     In some legislatures some parliamentarians have unusually formatted profiles regarding party names and switches.
     This function catches and corrects that unusualness.
@@ -469,8 +478,9 @@ def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_nam
     :param legislature: str
     :param entry_party_name: str
     :param entry_party_code: str
+    :param destination_party_code: str
     :param first_switch_date: dict of form {"month": '', "year": ''}
-    :return: correct entry party and first switch date
+    :return: correct entry party, first switch date, and destination party code
     """
 
     if surnames == "IORGOVAN" and given_names == "Antonie" and legislature == '1990-1992':
@@ -551,7 +561,13 @@ def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_nam
         entry_party_name, entry_party_code, first_switch_date = "Partidul Democrat Liberal", "PDL", \
                                                                 {"month": "02", "year": "2015"}
 
-    return entry_party_name, entry_party_code, first_switch_date
+    # correct "independent" party destinations that are actually transfers to other caucauses
+    if legislature in destination_ind_dict:
+        fullname = surnames + " " + given_names
+        if fullname in destination_ind_dict[legislature]:
+            destination_party_code = destination_ind_dict[legislature][fullname]
+
+    return entry_party_name, entry_party_code, first_switch_date, destination_party_code
 
 
 def assign_unique_person_ids(parl_leg_table):
