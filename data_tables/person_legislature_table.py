@@ -12,7 +12,7 @@ import re
 import operator
 import itertools
 import helpers
-from data_tables.destination_dict import destination_ind_dict
+from data_tables.destination_ind_dict import destination_ind_dict
 
 party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social Democrat",
                "PNL": "Partidul Naţional Liberal", "PDSR": "Partidul Democraţiei Sociale din România",
@@ -84,7 +84,7 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     header = ["PersID", "PersLegID", "legislature", "chamber", "constituency", "surnames", "given names",
               "mandate start", "mandate end", "death status", "entry party name", "entry party code",
               "destination party code", "first party switch month", "first party switch year", "seniority"]
-    with open(outdir + 'parliamentarians_party_switch_table.csv', 'w') as out_f:
+    with open(outdir + 'parliamentarians_person_legislature_table.csv', 'w') as out_f:
         writer = csv.writer(out_f)
         writer.writerow(header)
         for parl_leg in parl_leg_table:
