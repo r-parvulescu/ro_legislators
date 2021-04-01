@@ -51,6 +51,12 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     :param outdir: directory in which we dump the parliamentarian-legislature table
     :return: None
     """
+
+    header = ["PersID", "PersLegID", "legislature", "chamber", "constituency", "surnames", "given names",
+              "mandate start", "mandate end", "death status", "entry party name", "entry party code",
+              "entry ppg rank", "entry ppg rank dates", "destination party code", "first party switch month",
+              "first party switch year", "seniority", "former switcher "]
+
     parliamentarians = []
 
     # work in memory: unzip data files into tempdir, extract data, temp directory gone after use
@@ -77,17 +83,14 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
 
         parl_leg_table.append(row)
 
-    assign_unique_person_ids(parl_leg_table)
-    parl_leg_table = seniority(parl_leg_table)
-
     # deduplicate the table; e.g. SILAGHI Ovidiu Ioan for 2012-2016 appears twice in the data, for whatever reason
     parl_leg_table = helpers.deduplicate_list_of_lists(parl_leg_table)
 
+    assign_unique_person_ids(parl_leg_table)
+    parl_leg_table = seniority(parl_leg_table)
+    parl_leg_table = former_switcher(parl_leg_table, header)
+
     # write output table to disk
-    header = ["PersID", "PersLegID", "legislature", "chamber", "constituency", "surnames", "given names",
-              "mandate start", "mandate end", "death status", "entry party name", "entry party code",
-              "entry ppg rank", "entry ppg rank dates",
-              "destination party code", "first party switch month", "first party switch year", "seniority"]
     with open(outdir + 'parliamentarians_person_legislature_table.csv', 'w') as out_f:
         writer = csv.writer(out_f)
         writer.writerow(header)
@@ -393,13 +396,6 @@ def get_party_and_first_switch(soup):
         if first_switch_date and first_switch_date['year'] == '2001':
             first_switch_date, dest_party_code = {"month": '', "year": ''}, ""
 
-    # if the origin and destination party are the same, blank out the destination party and switching
-    # NB: this plows over cases where a legislator left their party only to return; this is interesting but rare
-    #      behaviour (max 32 people) so I just treat it as "did not switch," which is true, if a bit simplistic
-    if dest_party_code:
-        if entry_party_code == dest_party_code:
-            first_switch_date,  dest_party_code = {"month": '', "year": ''}, ""
-
     # run the data past the ad-hoc party name and switch corrector
     surnames, given_names = get_names(soup)
     legislature = get_legislature(soup)
@@ -407,12 +403,14 @@ def get_party_and_first_switch(soup):
                                                      entry_party_code, dest_party_code, first_switch_date)
     entry_party_name, entry_party_code, first_switch_date, dest_party_code = corrected_switch_data
 
-    # PD rebranded as PDL after they absorbed a faction of the PNL in 2008; I standardise it all to "PDL" for ease,
-    # though this is an anachronism
-    if entry_party_code == "PD":
-        entry_party_code = "PDL"
-    if dest_party_code == "PD":
-        dest_party_code = "PDL"
+    entry_party_code, dest_party_code = party_code_standardiser(entry_party_code, dest_party_code)
+
+    # if the origin and destination party are the same, blank out the destination party and switching
+    # NB: this plows over cases where a legislator left their party only to return; this is interesting but rare
+    #      behaviour (max 32 people) so I just treat it as "did not switch," which is true, if a bit simplistic
+    if dest_party_code:
+        if entry_party_code == dest_party_code:
+            first_switch_date,  dest_party_code = {"month": '', "year": ''}, ""
 
     return entry_party_name, entry_party_code, first_switch_date, dest_party_code
 
@@ -573,6 +571,27 @@ def adhoc_party_and_switches(surnames, given_names, legislature, entry_party_nam
     return entry_party_name, entry_party_code, first_switch_date, destination_party_code
 
 
+def party_code_standardiser(entry_party_code, dest_party_code):
+    """
+    Since some parties have rebranded, it's easier to just use the same name for all times, despite this being
+    anachornistic in some cases. The full party name is faithful to the period.
+    """
+    if entry_party_code == "PD":
+        entry_party_code = "PDL"
+    if dest_party_code == "PD":
+        dest_party_code = "PDL"
+    if entry_party_code == "PUR SL":
+        entry_party_code = "PC"
+    if dest_party_code == "PUR SL":
+        dest_party_code = "PC"
+    if entry_party_code == "PDSR":
+        entry_party_code = "PSD"
+    if dest_party_code == "PDSR":
+        dest_party_code = "PSD"
+
+    return entry_party_code, dest_party_code
+
+
 def get_rank_in_first_ppg(soup, mandate_start, mandate_end, surnames, given_names):
     """
     Returns the rank that a legislator held within their first parliamentary party group, and the span of time in which
@@ -708,3 +727,36 @@ def seniority(parl_leg_table):
             # add the seniority column at the end; 1-indexed
             table_with_seniority_column.append(pers_leg + [idx + 1])
     return table_with_seniority_column
+
+
+def former_switcher(parl_leg_table, header):
+    """
+    For legislators that have served more than one term, add a column indicating if they switched parties in a previous
+    mandate. In particular, "1" means that they switched in the mandate immediately before this one, "2" that they
+    switched parties during two mandates (notwithstanding how close they are to the current) and "0" means that they
+    never switched parties.
+
+    :param parl_leg_table: a table (as list of lists) where rows are parliamentarian-legislatures (i.e. info on one
+                           parliamentarian in one legislature)
+    :param header: list, header of the parl_leg_table
+    :return: a parl_leg table where the last column indicates whether and how a legislator is a former switcher
+    """
+
+    table_with_former_switcher_column = []
+    pid_col_idx, leg_col_idx = header.index("PersID"), header.index("legislature")
+    dest_party_code_col_idx = header.index("destination party code")
+
+    # make a set of strings of PersID-Legislature of each parliamentarian-legislature that features a switch
+    pers_legs_with_switch = {str(row[pid_col_idx]) + "." + row[leg_col_idx] for row in parl_leg_table
+                             if row[dest_party_code_col_idx]}
+
+    legs = ["1990-1992", "1992-1996", "1996-2000", "2000-2004", "2004-2008", "2008-2012", "2012-2016", "2016-2020"]
+
+    for parl_leg in parl_leg_table:  # for each parliamentarian-legislature
+        pid, current_leg = str(parl_leg[pid_col_idx]), parl_leg[leg_col_idx]
+        if current_leg == "1990-1992":  # skip first post-revolutionary legislature, nothing before it
+            continue
+        prior_leg = legs[legs.index(current_leg) - 1]
+        prior_switcher = 1 if pid + "." + prior_leg in pers_legs_with_switch else 0
+        table_with_former_switcher_column.append(parl_leg + [prior_switcher])
+    return table_with_former_switcher_column
