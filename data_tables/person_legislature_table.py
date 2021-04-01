@@ -616,14 +616,14 @@ def get_rank_in_first_ppg(soup, mandate_start, mandate_end, surnames, given_name
     # the default rank is a simple member, and the default date range is start and end of mandate
     # NB: somewhat deceptive default since the rank is only first rank of first party, but mandate may include mutiple
     #     rank and party changes
-    rank, date_range = "membru", m_start + "-" + m_end
+    rank, dates = "membru", m_start + "-" + m_end
 
     # turns out that a couple of legislators from 1990-1996 was never registered in any caucus; return default values
     if (surnames == "MOLDOVAN" and given_names == "Constantin") \
             or (surnames == "MOŢIU" and given_names == "Adrian Ovidiu") \
             or (surnames == "CEONTEA" and given_names == "Radu") \
             or (surnames == "CAZIMIR" and given_names == "Ştefan"):
-        return rank, date_range
+        return rank, dates
 
     # where information lives in the html
     info_fields = soup.find_all('div', class_="boxDep clearfix")
@@ -642,40 +642,40 @@ def get_rank_in_first_ppg(soup, mandate_start, mandate_end, surnames, given_name
 
                     # if the last entry is empty, then the person had high rank for all of their time in said party,
                     if not ppg1_text.split(hr)[-1]:
-                        date_range = m_start + "-" + m_end
+                        dates = m_start + "-" + m_end
 
                     else:  # else their rank for only a portion of their time in the first party
                         # case 1: they had the rank from one date until another
                         if "din" in ppg1_text.split(hr)[-1] and "până" in ppg1_text.split(hr)[-1]:
-                            date_range = ppg1_text.split(hr)[-1].replace("din", '').replace("până în", "-").replace(" ", "")
+                            dates = ppg1_text.split(hr)[-1].replace("din", '').replace("până în", "-").replace(" ", "")
                         # case 2: held the rank from a certain date until the end of their stay in the first party
                         elif "din" in ppg1_text.split(hr)[-1]:
-                            date_range = ppg1_text.split(hr)[-1].replace("din", '').replace(" ", "") + "-" + m_end
+                            dates = ppg1_text.split(hr)[-1].replace("din", '').replace(" ", "") + "-" + m_end
                         #  case 3: held the rank from the start of their time in the first party until a certain date
                         else:
-                            date_range = m_start + "-" + ppg1_text.split(hr)[-1].replace("până în", '').replace(" ", "")
+                            dates = m_start + "-" + ppg1_text.split(hr)[-1].replace("până în", '').replace(" ", "")
 
                     # replace the short month code (e.g. "aug") with its number correspondent (e.g. "08")
                     for smc in short_month_codes:
-                        if smc in date_range:
-                            date_range = date_range.replace(smc, short_month_codes[smc])
+                        if smc in dates:
+                            dates = dates.replace(smc, short_month_codes[smc])
 
                     # the base data don't always put a period between month and year, so you can get"052016"; fix this
                     # for the start period
-                    date_range = date_range[:2] + "." + date_range[2:] if "." not in date_range[:3] else date_range
+                    dates = dates[:2] + "." + dates[2:] if "." not in dates[:3] else dates
                     # for the end period
-                    date_range = date_range[:-4] + "." + date_range[-4:] if date_range[-5] != "." else date_range
+                    dates = dates[:-4] + "." + dates[-4:] if dates[-5] != "." else dates
 
                     rank = hr.lower()  # set the rank
 
                     # ensure that missing period issue is solved: format MO.YR-MO.YR must have two periods
-                    if date_range.count(".") != 2:
+                    if dates.count(".") != 2:
                         raise ValueError("INCORRENT DATE RANGE FORMAT")
 
-    return rank, date_range
+    return rank, dates
 
 
-def assign_unique_person_ids(parl_leg_table):
+def assign_unique_person_ids(parl_leg_table, header):
     """
     Goes through a table of parliamentarian-legislatures and assigns each person (and their associated mandates)
     one unique ID.
@@ -684,41 +684,50 @@ def assign_unique_person_ids(parl_leg_table):
     data are concerned (same party, neither switches, same mandates) so I leave these two merged. Nothing can be done.
 
     :param parl_leg_table: table (as list of lists) of parliamentarian-legislature, where each parl-leg is a row
+    :param header: list, header of the parl_leg_table
     :return: None
     """
 
+    # get column indexes
+    surnames_col_idx, given_names_col_idx = header.index("surnames"), header.index("given names")
+    pid_col_idx, leg_col_idx = header.index("PersID"), header.index("legislature")
+
     # assign person-level ID's
-    unique_full_names = {row[5] + ' ' + row[6] for row in parl_leg_table}  # row[5] == surname, row[6] == given name
+    unique_full_names = {row[surnames_col_idx] + ' ' + row[given_names_col_idx] for row in parl_leg_table}
     unique_person_ids = {ufn: idx for idx, ufn in enumerate(unique_full_names)}
     for parl_leg in parl_leg_table:
 
-        parl_full_name = parl_leg[5] + ' ' + parl_leg[6]
+        parl_full_name = parl_leg[surnames_col_idx] + ' ' + parl_leg[given_names_col_idx]
         if parl_full_name in unique_person_ids:
 
             # some people have identical full names, but different legislatures; handle
-            if parl_full_name == 'POPESCU Virgil' and parl_leg[2] == "1990-1992":  # parl_leg[2] = legislature
-                parl_leg[0] = 2802
-            elif parl_full_name == 'POPESCU Corneliu' and parl_leg[2] == "2004-2008":
-                parl_leg[0] = 2803
+            if parl_full_name == 'POPESCU Virgil' and parl_leg[leg_col_idx] == "1990-1992":
+                parl_leg[pid_col_idx] = 2802
+            elif parl_full_name == 'POPESCU Corneliu' and parl_leg[leg_col_idx] == "2004-2008":
+                parl_leg[pid_col_idx] = 2803
             else:  # everyone else with unique full names
-                parl_leg[0] = unique_person_ids[parl_full_name]
+                parl_leg[pid_col_idx] = unique_person_ids[parl_full_name]
 
         else:
             print(parl_full_name, " NOT IN FULLNAME SET, ERROR, CHECK")
 
 
-def seniority(parl_leg_table):
+def seniority(parl_leg_table, header):
     """
     Add a column at the end of the parliamentarian-legislature table which indicates seniority. A seniority of "1" means
     that this is the first legislature that said parliamentarian served in, "2" means the second legislature, etc.
 
     :param parl_leg_table: a table (as list of lists) where rows are parliamentarian-legislatures (i.e. info on one
                            parliamentarian in one legislature)
+    :param header: list, header of the parl_leg_table
     :return: a parl_leg table where the last column indicates seniorty
     """
 
+    # get column indexes
+    pid_col_idx, leg_col_idx = header.index("PersID"), header.index("legislature")
+
     # sort person-legislatures by unique ID and legislature, then group people by unique ID
-    parl_leg_table.sort(key=operator.itemgetter(0, 2))  # row[0] == person ID, row[2] == legislature
+    parl_leg_table.sort(key=operator.itemgetter(pid_col_idx, leg_col_idx))
     people = [person for key, [*person] in itertools.groupby(parl_leg_table, key=operator.itemgetter(0))]
 
     table_with_seniority_column = []
