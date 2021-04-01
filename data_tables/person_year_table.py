@@ -4,8 +4,9 @@ Romanian parliament, with an eye on the causes of a first party switch.
 """
 
 import csv
-import operator
 import itertools
+import operator
+from data_tables.dicts.idealogical_switch_cost import ideological_pswitch_costs
 from data_tables.dicts.conviction_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
     min_conv_old, min_conv_new, min_conv_none
 
@@ -258,23 +259,29 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
         header = pers_leg_table[0]
         pers_leg_table = pers_leg_table[1:]  # skip the header
 
-    # see how many legislatures each person was ultimately in, i.e. how long their political career was across elections
-    career_lens = {pers_leg[0]: 0 for pers_leg in pers_leg_table}
-    for pers_leg in pers_leg_table:
-        career_lens[pers_leg[0]] += 1
-
+    # get column indexes for the person-legislature table
     mandate_start_col_idx, mandate_end_col_idx = header.index("mandate start"), header.index("mandate end")
     pid_col_idx, seniority_col_idx = header.index("PersID"), header.index("seniority")
     leg_col_idx, chamb_col_idx = header.index("legislature"), header.index("chamber")
     const_col_idx, s_party_col_idx = header.index("constituency"), header.index("entry party code")
     p_switch_yr_col_idx, died_col_idx = header.index("first party switch year"), header.index("death status")
     dest_party_col_idx = header.index("destination party code")
+    rank_col_idx, rank_dates_col_ind = header.index("entry ppg rank"), header.index("entry ppg rank dates")
+
+    print(pers_leg_table[0])
+    print({row[-8] + "-" + row[-5]: "" for row in pers_leg_table if row[-5]})
+
+    # see how many legislatures each person was ultimately in, i.e. how long their political career was across elections
+    career_lens = {pers_leg[pid_col_idx]: 0 for pers_leg in pers_leg_table}
+    for pers_leg in pers_leg_table:
+        career_lens[pers_leg[[pid_col_idx]]] += 1
 
     person_year_table_header = ["person_id", "legis", "legis_clock", "year", "multi_legis_parl", "senate", "constit",
                                 "h_region", "senior", "senior_cat", "start_party", "p_size", "p_ethnic", "p_pers",
-                                "p_govt", "p_switch1", "p_dest", "elect_year", "lead_change", "leave_early",
-                                "lead_conv_one_year", "lead_conv_multi_year", "min_conv_full", "min_conv_old",
-                                "min_conv_new", "min_conv_none"]
+                                "p_govt", "pre_switch_rank", "p_switch1", "p_dest", "idlgcl_switch_cost",
+                                "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
+                                "lead_conv_multi_year", "min_conv_full", "min_conv_old", "min_conv_new",
+                                "min_conv_none"]
 
     pers_yr_table = []
 
@@ -335,6 +342,13 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                     dest_party = pers_leg[dest_party_col_idx] if party_switch else ""
 
+                    # get the rank of ther person within the PPG, relative to the daterange of the rank
+                    lower_date = int(pers_leg[rank_dates_col_ind].split("-")[0].split(".")[1])  # in MO.YR-MO.YR format
+                    upper_date = int(pers_leg[rank_dates_col_ind].split("-")[1].split(".")[1])
+                    pre_switch_rank = pers_leg[rank_col_idx] if lower_date <= yr <= upper_date else "membru"
+
+                    idlgcl_switch_cost = ideological_switch_cost(s_party, dest_party, yr) if dest_party else ""
+
                     # leader conviction columns
                     lead_conv_one_yr = 0
                     if yr in leader_conv_one_year and s_party in leader_conv_one_year[yr]:
@@ -363,7 +377,8 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                     person_year = [pid, leg, legis_clock, yr, multi_legis_parl, senate, const, h_reg, senior,
                                    seniority_cat, s_party, s_party_size, s_party_ethnic, s_personality_party, govt,
-                                   party_switch, dest_party, elec_yr, leader_change, leave_early, lead_conv_one_yr,
+                                   pre_switch_rank, party_switch, dest_party, idlgcl_switch_cost,
+                                   elec_yr, leader_change, leave_early, lead_conv_one_yr,
                                    lead_conv_multi_yr, min_conv_f, min_conv_o, min_conv_n, min_conv_no]
 
                     pers_yr_table.append(person_year)
@@ -377,18 +392,26 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header, multi_year_only=True)
 
 
-def former_switcher(parl_leg_table):
+def ideological_switch_cost(entry_party_code, destination_party_code, year):
     """
-    For legislators that have served more than one term, add a column indicating if they switched parties in a previous
-    mandate. In particular, "1" means that they switched in the mandate immediately before this one, "2" that they
-    switched parties during two mandates (notwithstanding how close they are to the current) and "0" means that they
-    never switched parties.
+    Looks up the party switch edge (e.g. "PC-ALDE" means "from PC to ALDE") in the edge list and returns the associated
+    edge weight, i.e. cost of switching.
 
-    :param parl_leg_table: a table (as list of lists) where rows are parliamentarian-legislatures (i.e. info on one
-                           parliamentarian in one legislature)
-    :return: a parl_leg table where the last column indicates whether and how a legislator is a former switcher
+    :param entry_party_code: str
+    :param destination_party_code: str
+    :param year: str or int
+    :return int, 0, 1, or 2
     """
-    pass
+
+    edge = entry_party_code + "-" + destination_party_code
+
+    if entry_party_code != "PNL" and destination_party_code != "PNL":
+        return ideological_pswitch_costs["any period"][edge]
+    else:  # edge includes PNL
+        if int(year) <= 2014:
+            return ideological_pswitch_costs["pre-2014"][edge]
+        else:  # after 2014 (exclusive)
+            return ideological_pswitch_costs["post-2014"][edge]
 
 
 def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, multi_year_only=False):
@@ -401,36 +424,40 @@ def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, mu
 
     :param person_year_table: table of person years, as a list of lists
     :param risk_set_table_out_path: str, path where we want the risk set table to live
-    :param header: list, the table header, same as for the person_year_table
+    :param header: list, the table header for the person_year_table
     :param multi_year_only: bool, switch to only keep people that we observe for more than one year
     :return: None
     """
+
+    # get header column indexes
+    pid_col_idx, yr_col_idx = header.index("person_id"), header.index("year")
+    leg_col_idx, pswitch1_indicator_col_idx = header.index("legis"), header.index("p_switch1")
 
     if multi_year_only:
         risk_set_table_out_path = risk_set_table_out_path[:-4] + "_multi_year_only.csv"
 
     # sort by person-ID and year, group by person ID
-    person_year_table.sort(key=operator.itemgetter(0, 3))  # row[0] = ID, row[3] = year
-    people = [person for key, [*person] in itertools.groupby(person_year_table, key=operator.itemgetter(0))]
+    person_year_table.sort(key=operator.itemgetter(pid_col_idx, yr_col_idx))
+    people = [person for key, [*person] in itertools.groupby(person_year_table, key=operator.itemgetter(pid_col_idx))]
 
     first_switch_risk_set_table = []
     for person in people:
         if multi_year_only and len(person) < 2:
             continue
 
-        # now group the person by legislature; # row[1] = legislature
-        pers_legs = [p_leg for key, [*p_leg] in itertools.groupby(person, key=operator.itemgetter(1))]
+        # now group the person by legislature
+        pers_legs = [p_leg for key, [*p_leg] in itertools.groupby(person, key=operator.itemgetter(leg_col_idx))]
 
         for p_leg in pers_legs:
             # find the year, if any, in which the person switched parties
             party_switch_year = ''
             for pers_yr in p_leg:
-                if int(pers_yr[15]) == 1:  # row[15] = party switch binary (1 = first party switch)
-                    party_switch_year = int(pers_yr[3])
+                if int(pers_yr[pswitch1_indicator_col_idx]) == 1:
+                    party_switch_year = int(pers_yr[yr_col_idx])
             # if there was a party switch, only include pre-switch years (switch year inclusive)
             for pers_yr in p_leg:
                 if party_switch_year:
-                    if int(pers_yr[3]) <= party_switch_year:
+                    if int(pers_yr[yr_col_idx]) <= party_switch_year:
                         first_switch_risk_set_table.append(pers_yr)
                 else:
                     first_switch_risk_set_table.append(pers_yr)
@@ -444,7 +471,7 @@ def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, mu
 if __name__ == "__main__":
     root = "/home/radu/insync/docs/CornellYears/6.SixthYear/currently_working/judicial_professions/"
     trunk = "data/parliamentarians/"
-    person_legislature_path = root + trunk + "parliamentarians_party_switch_table.csv"
+    person_legislature_path = root + trunk + 'parliamentarians_person_legislature_table.csv'
     person_year_path = root + trunk + "parliamentarians_person_year_table.csv"
     risk_set_path = root + trunk + "parliamentarians_first_party_switch_risk_set.csv"
     make_person_year_table(person_legislature_path, person_year_path, risk_set_path)
