@@ -68,11 +68,10 @@ leader_conv_one_year = {2014: ("PC"),
 
 # apply rule (B), matters for all subsequent years until the next legislative election
 leader_conv_multi_year = {2014: ("PC"),
-                          2015: ("PP DD", "PC") ,
+                          2015: ("PP DD", "PC"),
                           2016: ("UNPR", "PP DD", "PC"),
                           2019: ("PSD"),
                           2020: ("PSD")}
-
 
 # By the time that they received their conviction, some former ministers had changed parties, so they were no longer
 # in the party for which they served in government.
@@ -151,3 +150,106 @@ min_conv_none = {2012: {"PSD": 1},
                  2015: {"PC": 1, "PSD": 1},
                  2016: {"PNL": 2, "PSD": 1},
                  2018: {"PSD": 2}}
+
+"""
+The following dictionary shows, per person, the first date for which we could find media mentions (via Google searches)
+that they might be investigated for corruption and/or had committed corruption. The purpose is to estimate, however
+roughly, the date after which said legislator starts being personally worried about corruption investigations. 
+
+There are several ways we could think about what type of signal is given by having your name and "corruption" mentioned 
+in the press. First, we could say that it really only matters short term, say in the calendar year in which you hear
+about it. Then again, we might say that it matters medium term, until the next legislative elections that test whether
+or not this will affect one electorally. Long-term, one might say that having your name mentioned like that in marks you
+for the rest of your political career. Finally, one could say that this signal is later superseded, augmented, 
+diminished or somehow modulated by subsequent judicial events: actually being brought to court, having a first sentence
+(but subject to appeal) or finally being convicted.
+
+I discount the last three options because: 
+  (a) my data probably oversample on those who do make it to court, and some never do because they retire beforehand, 
+      charges are dropped under political pressure, etc. In other words, whether or not they make it to court or are 
+      even indicted may be endogenous to the process described here.
+  (b) a fortiori with having a first sentence passed: tons of intervening variables in the judicial process. I would say
+      that this is a very important signal of its own
+  (c) if someone IS successfully convicted for corruption then they will face a political interdict, which is lifted 
+      after some years but in any case tends to dynamite political careers. So here there's nothing to study, since the
+      action directly causes the effect.
+      
+Consequently I will ultimately make three variables from the date of investigation: whether one is affected in said 
+calendar year, from that calendar year (inclusive) until the next election, or from that calendar year (inclusive) until
+they drop out of the sample.
+
+NB: three people in this database (Relu Fenechiu, Catalin Marian Radulescu, and Mircea Gheorghe Dragici) were
+    investigated for more than one act of corruption. I collapse it and just use the first investigation, since this is
+    the one that tips them off that the law is after them.
+"""
+
+media_announcement_dict = {'Bivolaru Gabriel': '1.1.1996',
+                           'Ghiveciu Marian': '1.1.2008',
+                           'Mischie Nicolae': '4.30.2004',
+                           'Copos George': '1.19.2006',
+                           'Roșca Stănescu Sorin': '2.7.2006',
+                           'Mihăilescu Șerban': '3.15.2006',
+                           'Duțu Stelian': '4.5.2006',
+                           'Dumitru Ion': '3.16.2007',
+                           'Fenechiu Relu': '5.15.2007',
+                           'Rus Ioan Aurel': '12.6.2007',
+                           'Voiculescu Dan': '9.26.2008',
+                           'Șereș Codruț': '10.26.2008',
+                           'Pop Virgil': '11.18.2008',
+                           'Voicu Cătălin': '12.11.2009',
+                           'Solomon Antonie': '3.2.2010',
+                           'Pandele Sorin Andi': '6.16.2010',
+                           'Păsat Dan': '8.10.2010',
+                           'Iftime Dragoș Adrian': '12.20.2010',
+                           'Olosz Gergely': '4.12.2011',
+                           'Novac Cornelia Brîndușa': '5.16.2011',
+                           'Banias Mircea Marius': '5.23.2011',
+                           'Strugaru Stelică Iacob': '9.19.2011',
+                           'Cindrea Ioan': '9.27.2011',
+                           'Kerekes Károly': '9.27.2011',
+                           'Neacșu Marian': '11.22.2011',
+                           'Stanciu Anghel': '12.30.2011',
+                           'Popescu Dumitru Dian': '7.3.2012',
+                           'Măgureanu Cezar Mircea': '7.24.2012',
+                           'Buciuta Ștefan': '8.6.2012',
+                           'Movilă Petru': '9.28.2012',
+                           'Trășculescu Alin': '11.11.2012',
+                           'Stan Ion': '11.22.2012',
+                           'Diaconu Mircea': '11.23.2012',
+                           'Costin Gheorghe': '3.3.2013',
+                           'Máté András Levente': '3.13.2013',
+                           'Niculescu-Mizil Oana': '3.14.2013',
+                           'Longher Ghervazen': '3.16.2013',
+                           'Lazăr Sorin Constantin': '3.18.2013',
+                           'Crăciunescu Grigore': '3.21.2013',
+                           'Cătăniciu Steluța Gustica': '3.27.2013',
+                           'Oltean Ioan': '9.12.2013',
+                           'Silaghi Ovidiu': '9.12.2013',
+                           'Bădălău Niculae': '10.28.2013',
+                           'Merka Adrian Miroslav': '11.11.2013',
+                           'Grosaru Mircea': '11.11.2013',
+                           'Mircovici Niculae': '11.11.2013',
+                           'Coman Gheorghe': '12.19.2013',
+                           'Pâslaru Florin Costin': '1.7.2014',
+                           'Gliga Vasile Ghiorghe': '1.8.2014',
+                           'Rădulescu Cătălin Marian': '2.17.2014',
+                           'Cosma Vlad Alexandru': '2.19.2014',
+                           'Rușanu Dan Radu': '2.21.2014',
+                           'Drăghici Mircea Gheorghe': '3.4.2014',
+                           'Secășan Iosif': '3.27.2014',
+                           'Isăilă Marius Ovidiu': '4.4.2014',
+                           'Popescu Florin Aurelian': '4.23.2014',
+                           'Popoviciu Alin Augustin Florin': '5.30.2014',
+                           'Sămărtinean Cornel Mircea': '5.30.2014',
+                           'Drăghici Sonia Maria': '6.10.2014',
+                           'Cordoș Alexandru': '8.12.2014',
+                           'Diniță Ion': '10.10.2014',
+                           'Ursărescu Dorinel': '10.21.2014',
+                           'Chiru Gigi Christian': '10.30.2014',
+                           'Markó Attila': '11.21.2014',
+                           'Culețu Dănuț': '1.6.2015',
+                           'Greblă Toni': '1.22.2015',
+                           'Nicolescu Theodor Cătălin': '3.18.2015',
+                           'Roșca Mircea': '4.14.2015',
+                           'Ochi Ion': '4.21.2015',
+                           'Ghiță Sebastian': '7.7.2015'}
