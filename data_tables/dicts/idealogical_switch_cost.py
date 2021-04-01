@@ -16,9 +16,7 @@ The categorisation of parties is:
     PNTCD: right
     PNL: right (pre-merger with PDL in 2014), center (post-merger with PDL in 2014)
     PDL: center
-    PDSR: left
     PP DD: center
-    PUR SL: center
     ALDE: center
     PC: center
     PRO: left
