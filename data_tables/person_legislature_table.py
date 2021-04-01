@@ -87,8 +87,8 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     # deduplicate the table; e.g. SILAGHI Ovidiu Ioan for 2012-2016 appears twice in the data, for whatever reason
     parl_leg_table = helpers.deduplicate_list_of_lists(parl_leg_table)
 
-    assign_unique_person_ids(parl_leg_table)
-    parl_leg_table = seniority(parl_leg_table)
+    assign_unique_person_ids(parl_leg_table, header)
+    parl_leg_table = seniority(parl_leg_table, header)
     parl_leg_table = former_switcher(parl_leg_table, header)
 
     # write output table to disk
