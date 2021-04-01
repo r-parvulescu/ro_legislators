@@ -13,6 +13,7 @@ import operator
 import itertools
 import helpers
 from data_tables.dicts.destination_ind_dict import destination_ind_dict
+from local import root
 
 party_codes = {"FSN": "Frontul Salvării Naţionale", "PSD": "Partidul Social Democrat",
                "PNL": "Partidul Naţional Liberal", "PDSR": "Partidul Democraţiei Sociale din România",
@@ -769,3 +770,9 @@ def former_switcher(parl_leg_table, header):
         prior_switcher = 1 if pid + "." + prior_leg in pers_legs_with_switch else 0
         table_with_former_switcher_column.append(parl_leg + [prior_switcher])
     return table_with_former_switcher_column
+
+
+if __name__ == "__main__":
+    out_directory = root + 'data/parliamentarians/'
+    zip_arch_path = out_directory + 'raw_htmls/parliamentarian_legislature_profile_site_htmls.zip'
+    make_parliamentarians_legislature_table(zip_arch_path, out_directory)
