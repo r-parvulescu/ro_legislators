@@ -10,7 +10,6 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import shutil
 import time
 from local import root
-import make_departures_table
 
 
 def scrape_parliamentarians(outdir):
@@ -63,6 +62,4 @@ def scrape_parliamentarians(outdir):
 
 if __name__ == "__main__":
     out_directory = root + 'data/parliamentarians/'
-    zip_arch_path = out_directory + '/parliamentarian_legislature_profile_site_htmls.zip'
     scrape_parliamentarians(out_directory)
-    make_departures_table.make_parliamentarians_legislature_table(zip_arch_path, out_directory)
