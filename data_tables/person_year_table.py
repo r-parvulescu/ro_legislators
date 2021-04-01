@@ -7,10 +7,11 @@ import csv
 import itertools
 import operator
 from data_tables.dicts.idealogical_switch_cost import ideological_pswitch_costs
-from data_tables.dicts.conviction_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
-    min_conv_old, min_conv_new, min_conv_none
+from data_tables.dicts.corruption_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
+    min_conv_old, min_conv_new, min_conv_none, media_announcement_dict_pids
 from data_tables.dicts.reference_dicts import party_name_changes, historical_regions_dict, govt_parties, \
     election_years, party_leader_changes, party_size, ethnic_parties, personality_parties
+from local import root
 
 
 def make_person_year_table(person_legislature_table_path, person_year_table_out_path, risk_set_table_out_path):
@@ -38,20 +39,17 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
     dest_party_col_idx = header.index("destination party code")
     rank_col_idx, rank_dates_col_ind = header.index("entry ppg rank"), header.index("entry ppg rank dates")
 
-    print(pers_leg_table[0])
-    print({row[-8] + "-" + row[-5]: "" for row in pers_leg_table if row[-5]})
-
     # see how many legislatures each person was ultimately in, i.e. how long their political career was across elections
     career_lens = {pers_leg[pid_col_idx]: 0 for pers_leg in pers_leg_table}
     for pers_leg in pers_leg_table:
-        career_lens[pers_leg[[pid_col_idx]]] += 1
+        career_lens[pers_leg[pid_col_idx]] += 1
 
     person_year_table_header = ["person_id", "legis", "legis_clock", "year", "multi_legis_parl", "senate", "constit",
                                 "h_region", "senior", "senior_cat", "start_party", "p_size", "p_ethnic", "p_pers",
                                 "p_govt", "pre_switch_rank", "p_switch1", "p_dest", "idlgcl_switch_cost",
                                 "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
                                 "lead_conv_multi_year", "min_conv_full", "min_conv_old", "min_conv_new",
-                                "min_conv_none"]
+                                "min_conv_none",  "ann_year_only", "ann_to_next_elect","ann_perm_mark"]
 
     pers_yr_table = []
 
@@ -153,6 +151,9 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                     pers_yr_table.append(person_year)
 
+    # add the media announcement
+    pers_yr_table = media_announcement_corruption(pers_yr_table, person_year_table_header)
+
     with open(person_year_table_out_path, 'w') as out_f:
         writer = csv.writer(out_f)
         writer.writerow(person_year_table_header)
@@ -182,6 +183,47 @@ def ideological_switch_cost(entry_party_code, destination_party_code, year):
             return ideological_pswitch_costs["pre-2014"][edge]
         else:  # after 2014 (exclusive)
             return ideological_pswitch_costs["post-2014"][edge]
+
+
+def media_announcement_corruption(person_year_table, header):
+    """
+    Adds three indicator columns:
+    (a) "1" if one heard about a media piece reporting on one's putative corruption in a given calendar year
+    (b) "1" if one heard about a media piece reporting on one's putative corruption in a given calendar year and all
+        subsequent calendar years until the end of one's mandate
+    (c) "1" if one heard about a media piece reporting on one's putative corruption in a given calendar year and all
+        subsequent calendar years until the end of one's political career, i.e. when they drop out of the dataset
+
+    :param person_year_table: table of person years, as a list of lists
+    :param header: list, the table header for the person_year_table
+    :return a person-year table with three extra columns relating to media reporting
+    """
+
+    pid_col_idx, yr_col_idx = header.index("person_id"), header.index("year")
+    leg_col_idx = header.index("legis")
+
+    table_with_media_reporting_columns = []
+
+    for pers_year in person_year_table:
+        pid, leg, yr = int(pers_year[pid_col_idx]), pers_year[leg_col_idx], int(pers_year[yr_col_idx])
+        new_cols = [0, 0, 0]  # in this order: a, b, c (see docstring for meaning of letters)
+        if pid in media_announcement_dict_pids:
+            announcement_year = int(media_announcement_dict_pids[pid].split(".")[-1])
+
+            # for all years after the announcement, inclusive
+            if announcement_year <= yr:
+                new_cols[2] = 1
+
+                # for all years after the announcement (inclusive) until the final legislature year (inclusive)
+                if yr <= int(leg.split("-")[1]):  # leg in form of "2012-2016"
+                    new_cols[1] = 1
+
+                    # only for the calendar year of the announcement
+                    if announcement_year == yr:
+                        new_cols[0] = 1
+
+        table_with_media_reporting_columns.append(pers_year + new_cols)
+    return table_with_media_reporting_columns
 
 
 def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, multi_year_only=False):
@@ -239,7 +281,6 @@ def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, mu
 
 
 if __name__ == "__main__":
-    root = "/home/radu/insync/docs/CornellYears/6.SixthYear/currently_working/judicial_professions/"
     trunk = "data/parliamentarians/"
     person_legislature_path = root + trunk + 'parliamentarians_person_legislature_table.csv'
     person_year_path = root + trunk + "parliamentarians_person_year_table.csv"
