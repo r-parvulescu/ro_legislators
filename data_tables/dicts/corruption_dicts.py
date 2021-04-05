@@ -267,19 +267,17 @@ media_announcement_dict = {'BIVOLARU Gabriel': '1.1.1996',
 
 # I now do the same for legislators and the date on which they received their first guilty verdict (subject, however,
 # to appeal). Again, ultimately I will make three variables from this information.
-# NB: Relu Fenechiu, Codruţ Şereş, Corneliu Dobriţoiu and Tudor Chiuariu were also ministers. Since I count them with
-#     the ministers I discount them here, to avoid doublt counting
+# NB: Relu Fenechiu, Codruţ Şereş, Corneliu Dobriţoiu, George Copos, and Tudor Chiuariu were also ministers. Since I
+#     count them with the ministers I discount them here, to avoid double counting.
+#     Likewise Dan Voiculescu and Liviu Dragnea were counted with party leaders, so I ignore them here.
 # NB: I do not know the exact date of first conviction for Gabriel Bivolaru, Ioan Aurel Rus, Sorin Andi Pandele so I put
 #     January first as the default date
 # NB: the month is missing for Viorel Gheorghiu, I put January as the default
 first_conviction_appeal_possible = {'BIVOLARU Gabriel': '01.01.2002',
                                     'GHIVECIU Marian': '12.05.2015',
                                     'MISCHIE Nicolae': '12.07.2007',
-                                    'COPOS Gheorghe': '29.01.2013',
                                     'MIHĂILESCU Petru Şerban': '20.12.2011',
-                                    'DUMITRU Ion': '27.09.2012',
                                     'RUS Ioan Aurel': '01.01.2012',
-                                    'VOICULESCU Dan': '26.09.2013',
                                     'POP Virgil': '16.12.2011',
                                     'VOICU Cătălin': '01.06.2012',
                                     'SOLOMON Antonie': '11.07.2013',
@@ -318,7 +316,79 @@ first_conviction_appeal_possible = {'BIVOLARU Gabriel': '01.01.2002',
                                     'ROŞCA Mircea': '28.10.2019',
                                     'OCHI Ion': '01.11.2017',
                                     'THUMA Hubert Petru Ştefan': "22.11.2013",
-                                    'GIREADĂ Dumitru Verginel': "05.04.2012",
                                     'MUNTEAN Mircia': "08.07.2013",
                                     'DRĂGHICI Mircea Gheorghe': '15.10.2020',
                                     'GHEORGHIU Viorel': '11.01.2005'}
+
+# this shows all the people who received a final, guilty verdict for a crime of corruption (i.e. no possibility of
+# appeal) as well as the date on which they received said verdict.
+final_guilty_verdict = {'BIVOLARU Gabriel': '01.04.2004',
+                        'GHIVECIU Marian': '23.02.2016',
+                        'MISCHIE Nicolae': '18.03.2013',
+                        'ROŞCA STĂNESCU Sorin Ştefan': '7.10.2014',
+                        'DUMITRU Ion': '07.06.2013',
+                        'POP Virgil': '26.03.2012',
+                        'VOICU Cătălin': '22.04.2013',
+                        'SOLOMON Antonie': '20.09.2013',
+                        'PANDELE Sorin Andi': '21.01.2014',
+                        'PĂSAT Dan': '12.12.2013',
+                        'IFTIME Dragoş Adrian': '25.06.2014',
+                        'OLOSZ Gergely': '20.12.2018',
+                        'CINDREA Ioan': '15.09.2015',
+                        'KEREKES Károly': '10.02.2015',
+                        'NEACŞU Marian': '23.02.2016',
+                        'STANCIU Anghel': '24.11.2015',
+                        'POPESCU Dumitru Dian': '31.05.2016',
+                        'BUCIUTA Ştefan': '10.03.2015',
+                        'STAN Ion': '25.01.2016',
+                        'COSTIN Gheorghe': '04.06.2016',
+                        'MÁTÉ András Levente': '10.02.2015',
+                        'NICULESCU MIZIL ŞTEFĂNESCU Oana': '24.10.2016',
+                        'LAZĂR Sorin Constantin': '05.12.2014',
+                        'CRĂCIUNESCU Grigore': '28.03.2016',
+                        'COMAN Gheorghe': '28.04.2014',
+                        'PÂSLARU Florin Costin': '15.07.2016',
+                        'GLIGA Vasile Ghiorghe': '30.06.2015',
+                        'RĂDULESCU Cătălin Marian': '05.12.2016',
+                        'SECĂŞAN Iosif': '25.03.2015',
+                        'POPESCU Florin Aurelian': '14.03.2016',
+                        'URSĂRESCU Dorinel': '07.06.2020',
+                        'CHIRU Gigi Christian': '13.11.2017',
+                        'NICOLESCU Theodor Cătălin': '08.10.2019',
+                        'THUMA Hubert Petru Ştefan': "22.11.2013",
+                        'GIREADĂ Dumitru Verginel': "05.04.2012",
+                        'MUNTEAN Mircia': "08.07.2013",
+                        'DRĂGHICI Mircea Gheorghe': '15.10.2020',
+                        'GHEORGHIU Viorel': '04.06.2008'}
+
+# the next dict shows a count of how many legislators in a given year, in a given party were given final,
+# guilty sentences for crimes of corruption
+
+# NB: this first version counts both current and former members of the party. To ascertain party membership I simply
+#     look in my own data tables to see which party(/ies) the deputy was listed under their tenure
+
+# Dan Păsat went from PNL to PDL: I count him in both. Likewise for Dumitru Dian Popescu, went from PNL to ALDE.
+# I don't include "independents" since no one ever stars in that category. For instance, One Niculescu-Mizil Ştefan
+# went from PSD to independent and was then convicted. Gheorghe Coman went from PP DD to PC in 2014. Iosif Secăşan went
+# from PDL to PNL in 2012. Florin Aurelian Popescu kept flip-flopping between PDL and PNL (but no more PDL after 2014).
+# Dorinel Ursărescu went from PNL to ALDE in 2014. Mircia Muntean went from PDL to PSD in 2014
+
+# TODO: check before Catalin Voicu to make sure nobody switched parties; only chcecked after
+
+legis_count_guilt_verdict = {2004: {"PSD": 1},
+                             2005: {},
+                             2006: {},
+                             2007: {},
+                             2008: {"PSD": 1},
+                             2009: {},
+                             2010: {},
+                             2011: {},
+                             2012: {"PNL": 2},
+                             2013: {"PSD": 3, "PP DD": 1, "PDL": 2, "PNL": 2},
+                             2014: {"PNL": 1, "PC": 2, "PDL": 2, "PSD": 1, "PP DD": 1},
+                             2015: {"PNL": 1, "PDL": 1, "PSD": 3, "UDMR": 2, "MIN": 1},
+                             2016: {"PSD": 6, "PNL": 4, "ALDE": 1},
+                             2017: {"PNL": 1},
+                             2018: {"UDMR": 1},
+                             2019: {"PNL": 1},
+                             2020: {"PNL": 1, "ALDE": 1, "PSD": 1}}
