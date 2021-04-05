@@ -322,5 +322,3 @@ first_conviction_appeal_possible = {'BIVOLARU Gabriel': '01.01.2002',
                                     'MUNTEAN Mircia': "08.07.2013",
                                     'DRĂGHICI Mircea Gheorghe': '15.10.2020',
                                     'GHEORGHIU Viorel': '11.01.2005'}
-
-# TODO: check that each PID is properly pinged by the script
