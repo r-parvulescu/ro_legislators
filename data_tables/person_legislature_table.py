@@ -56,7 +56,7 @@ def make_parliamentarians_legislature_table(zip_archive_path, outdir):
     header = ["PersID", "PersLegID", "legislature", "chamber", "constituency", "surnames", "given names",
               "mandate start", "mandate end", "death status", "entry party name", "entry party code",
               "entry ppg rank", "entry ppg rank dates", "destination party code", "first party switch month",
-              "first party switch year", "seniority", "former switcher "]
+              "first party switch year", "seniority", "former switcher"]
 
     parliamentarians = []
 
@@ -741,10 +741,13 @@ def seniority(parl_leg_table, header):
 
 def former_switcher(parl_leg_table, header):
     """
-    For legislators that have served more than one term, add a column indicating if they switched parties in a previous
-    mandate. In particular, "1" means that they switched in the mandate immediately before this one, "2" that they
-    switched parties during two mandates (notwithstanding how close they are to the current) and "0" means that they
-    never switched parties.
+    For legislators that have served more than one term, add a column indicating if they switched parties in the
+    previous mandate. In particular, "1" means that they switched in the mandate immediately before this one, "2" that
+    they switched parties during two mandates (notwithstanding how close they are to the current) and "0" means that
+    they never switched parties.
+
+    NB: this assumes that what matters is whether a legislator switched parties in the immediately preceding mandate:
+        its debatable whether a longer history is important here.
 
     :param parl_leg_table: a table (as list of lists) where rows are parliamentarian-legislatures (i.e. info on one
                            parliamentarian in one legislature)
