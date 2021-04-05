@@ -8,7 +8,8 @@ import itertools
 import operator
 from data_tables.dicts.idealogical_switch_cost import ideological_pswitch_costs
 from data_tables.dicts.corruption_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
-    min_conv_old, min_conv_new, min_conv_none, media_announcement_dict
+    min_conv_old, min_conv_new, min_conv_none, media_announcement_dict, first_conviction_appeal_possible, \
+    legis_guilty_count
 from data_tables.dicts.reference_dicts import party_name_changes, historical_regions_dict, govt_parties, \
     election_years, party_leader_changes, party_size, ethnic_parties, personality_parties
 from local import root
@@ -48,10 +49,12 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
     person_year_table_header = ["person_id", "surnames", "given names", "legis", "legis_clock", "year",
                                 "multi_legis_parl", "senate", "constit",
                                 "h_region", "senior", "senior_cat", "start_party", "p_size", "p_ethnic", "p_pers",
-                                "p_govt", "pre_switch_rank", "p_switch1", "destination_party", "idlgcl_switch_cost",
+                                "p_govt", "pre_switch_rank", "rank_change", "p_switch1", "destination_party",
+                                "idlgcl_switch_cost",
                                 "former_switcher", "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
                                 "lead_conv_multi_year", "min_conv_full", "min_conv_old", "min_conv_new",
-                                "min_conv_none",  "ann_year_only", "ann_to_next_elect", "ann_perm_mark"]
+                                "min_conv_none", "other_legis_conv_full", "pconv_same_yr", "pconv_to_elec",
+                                "pconv_perm_mark", "ann_year_only", "ann_to_next_elect", "ann_perm_mark"]
 
     pers_yr_table = []
 
@@ -134,43 +137,32 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                     idlgcl_switch_cost = ideological_switch_cost(s_party, dest_party, yr) if dest_party else ""
 
-                    # leader conviction columns
-                    lead_conv_one_yr = 0
-                    if yr in leader_conv_one_year and s_party in leader_conv_one_year[yr]:
-                        lead_conv_one_yr = 1
+                    cnvct_data = get_convictions_data(yr, s_party)
 
-                    lead_conv_multi_yr = 0
-                    if yr in leader_conv_multi_year and s_party in leader_conv_multi_year[yr]:
-                        lead_conv_multi_yr = 1
-
-                    # ministerial conviction columns
-                    min_conv_f = 0
-                    if yr in min_conv_full and s_party in min_conv_full[yr]:
-                        min_conv_f = min_conv_full[yr][s_party]
-
-                    min_conv_o = 0
-                    if yr in min_conv_old and s_party in min_conv_old[yr]:
-                        min_conv_o = min_conv_old[yr][s_party]
-
-                    min_conv_n = 0
-                    if yr in min_conv_new and s_party in min_conv_new[yr]:
-                        min_conv_n = min_conv_new[yr][s_party]
-
-                    min_conv_no = 0
-                    if yr in min_conv_none and s_party in min_conv_none[yr]:
-                        min_conv_no = min_conv_none[yr][s_party]
+                    lead_conv_one_yr = cnvct_data["lead_conv_one_year"]
+                    lead_conv_multi_yr = cnvct_data["lead_conv_multi_year"]
+                    mconv_full, mconv_old = cnvct_data["min_conv_full"], cnvct_data["min_conv_old"]
+                    mconv_new, mconv_none = cnvct_data["min_conv_new"], cnvct_data["min_conv_none"]
+                    others_legs_conv_full = cnvct_data["legis_conv_full"]
+                    pconv_appeal_same_yr = self_convicted_appeal(surnames, given_names, yr, leg, "same year")
+                    pconv_appeal_to_elec = self_convicted_appeal(surnames, given_names, yr, leg, "until next election")
+                    pconv_appeal_pmark = self_convicted_appeal(surnames, given_names, yr, leg, "permanent mark")
 
                     person_year = [pid, surnames, given_names, leg, legis_clock, yr, multi_legis_parl, senate, const,
                                    h_reg, senior, seniority_cat, s_party, s_party_size, s_party_ethnic,
                                    s_personality_party, govt, pre_switch_rank, party_switch, dest_party,
                                    idlgcl_switch_cost, former_switcher,  elec_yr, leader_change, leave_early,
-                                   lead_conv_one_yr, lead_conv_multi_yr, min_conv_f, min_conv_o, min_conv_n,
-                                   min_conv_no]
+                                   lead_conv_one_yr, lead_conv_multi_yr, mconv_full, mconv_old, mconv_new,
+                                   mconv_none, others_legs_conv_full, pconv_appeal_same_yr, pconv_appeal_to_elec,
+                                   pconv_appeal_pmark]
 
                     pers_yr_table.append(person_year)
 
     # add the media announcement
     pers_yr_table = media_announcement_corruption(pers_yr_table, person_year_table_header)
+
+    # add rank change column
+    pers_yr_table = rank_change(pers_yr_table, person_year_table_header)
 
     with open(person_year_table_out_path, 'w') as out_f:
         writer = csv.writer(out_f)
@@ -179,6 +171,64 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header)
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header, multi_year_only=True)
+
+
+def get_convictions_data(yr, s_party):
+    """Get convictions data by checking external conviction dictionaries. Return a dict of information on convictions"""
+
+    conviction_dict = {"lead_conv_one_year": 0, "lead_conv_multi_year": 0,
+                       "min_conv_full": 0, "min_conv_old": 0, "min_conv_new": 0, "min_conv_none": 0,
+                       "legis_conv_full": 0}
+
+    if yr in leader_conv_one_year and s_party in leader_conv_one_year[yr]:
+        conviction_dict["lead_conv_one_year"] = 1
+
+    if yr in leader_conv_multi_year and s_party in leader_conv_multi_year[yr]:
+        conviction_dict["lead_conv_multi_year"] = 1
+
+    if yr in min_conv_full and s_party in min_conv_full[yr]:
+        conviction_dict["min_conv_f"] = min_conv_full[yr][s_party]
+
+    if yr in min_conv_old and s_party in min_conv_old[yr]:
+        conviction_dict["min_conv_old"] = min_conv_old[yr][s_party]
+
+    if yr in min_conv_new and s_party in min_conv_new[yr]:
+        conviction_dict["min_conv_new"] = min_conv_new[yr][s_party]
+
+    if yr in min_conv_none and s_party in min_conv_none[yr]:
+        conviction_dict["min_conv_none"] = min_conv_none[yr][s_party]
+
+    if yr in legis_guilty_count and s_party in legis_guilty_count[yr]:
+        conviction_dict["legis_conv_full"] = legis_guilty_count[yr][s_party]
+
+    return conviction_dict
+
+
+def self_convicted_appeal(surnames, given_names, yr, legis, condition):
+    """
+    Check the dictionary that records which legislators were convicted when (with possibility of appeal) and return 1
+    for different conditions of oneself having been convicted with possibility of appeal. If no conditions are met,
+    return 0.
+
+    :param surnames: str
+    :param given_names: str
+    :param yr: str or int, e.g. 2014, "2015"
+    :param legis: str, e.g. "2000-2004"
+    :param condition: str, either "same year", "until next election" or "permanent mark"
+    :return: int, a 1 or 0
+    """
+    fullname = surnames + " " + given_names
+    last_legis_year = int(legis.split("-")[1])
+    if fullname in first_conviction_appeal_possible:
+        conv_date = first_conviction_appeal_possible[fullname].split(".")  # comes in "DAY.MO.YR" format
+        conv_month, conv_year = conv_date[1], int(conv_date[2])
+        if condition == "same year" and int(yr) == conv_year:
+            return 1
+        if condition == "until next election" and conv_year <= int(yr) <= last_legis_year:
+            return 1
+        if condition == "permanent mark" and conv_year <= int(yr):
+            return 1
+    return 0
 
 
 def ideological_switch_cost(entry_party_code, destination_party_code, year):
@@ -202,6 +252,50 @@ def ideological_switch_cost(entry_party_code, destination_party_code, year):
         else:  # after 2014 (exclusive)
             switch_cost = ideological_pswitch_costs["post-2014"][edge]
     return cost_map[switch_cost]
+
+
+def rank_change(person_year_table, header):
+    """
+    Sees how one's rank within the first parliamentary party group has changed between years.
+
+    :param person_year_table:
+    :param header:
+    :return:
+    """
+    # intialise the new table
+    py_table_with_rank_change = []
+
+    # initialise the dictionary of position rankings
+    rank_dict = {"lider": 3, "vicelider": 2, "secretar": 1, "membru": 0}
+
+    # get column indexes
+    pid_col_idx, rank_col_idx = header.index("person_id"), header.index("pre_switch_rank")
+    leg_col_idx, yr_col_idx = header.index("legis"), header.index("year")
+
+    # sort table by pid and year
+    person_year_table.sort(key=operator.itemgetter(pid_col_idx, yr_col_idx))
+
+    # group table by person
+    people = [person for key, [*person] in itertools.groupby(person_year_table, key=operator.itemgetter(pid_col_idx))]
+
+    for person in people:
+        # then group by legislature
+        pers_legs = [p_leg for key, [*p_leg] in itertools.groupby(person, key=operator.itemgetter(leg_col_idx))]
+
+        for p_leg in pers_legs:
+            for idx, pers_yr in enumerate(p_leg):
+                if idx > 0:
+                    current_rank, previous_rank = pers_yr[rank_col_idx], p_leg[idx-1][rank_col_idx]
+                    if rank_dict[current_rank] > rank_dict[previous_rank]:
+                        delta_rank = "increase"
+                    elif rank_dict[current_rank] == rank_dict[previous_rank]:
+                        delta_rank = "no change"
+                    else:  # rank_dict[current_rank] < rank_dict[previous_rank]:
+                        delta_rank = "decrease"
+                else:  # first year of legislature, no rank change was possible
+                    delta_rank = "first year"
+                py_table_with_rank_change.append(pers_yr[:rank_col_idx+1] + [delta_rank] + pers_yr[rank_col_idx+1:])
+    return py_table_with_rank_change
 
 
 def media_announcement_corruption(person_year_table, header):
