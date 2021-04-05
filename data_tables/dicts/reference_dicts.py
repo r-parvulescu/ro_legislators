@@ -204,23 +204,67 @@ leg_chamb_size = {"2000-2004": {"SENATOR": 140, "DEPUTAT": 345},
                   "2012-2016": {"SENATOR": 176, "DEPUTAT": 412},
                   "2016-2020": {"SENATOR": 136, "DEPUTAT": 329}}
 
-# TODO also get a list of parliamentarians convicted without possibility of appeal
+# ALL INFO FROM WIKIPEDIA
+# I look at post-2008 espeically since I study the 2008, 2012, and 2020 legislatures
+# NB: Alina Gorghiu was co-leader with Vasile Blaga for most of her time as president of the PNL. Since their mandates
+#     overlap almost entirely the fact that there were two of them doesn't really matter
+# NB: Daniel Constantin was co-president of ALDE after Tariceanu's PNL breakaway faction fused with the PC to make ALDE,
+#     but Constantin left in 2017, with Tariceanu remaining sole leader. I therefore consider 2017 a leadership turnover
+#     year for ALDE.
+# NB: the UNPR effectively went on ice from 2016 to 2018, until it was revamped by Oprea, who had founded it in the
+#     first place
+# NB: PP DD was absorbed into UNPR in June of 2015
+# NB: on the 17th of August 2020 USR and the extraparliamentary party PLUS officially fused, with PLUS president D
+#     Dacian Ciolos becoming co-president alongside Barna. I have not counted this as a change in leadership because
+#     it did not involve Barna leaving, and it involved an extraparliamentary party.
+party_leaders = {"UDMR": {"Marko Bela": "1993-02.2011", "Kelemen Hunor": "02.2011-prezent"},
+                 "PDL": {"Emil Boc": "01.01.2005-30.06.2012", "Vasile Blaga": "30.06.2012-17.12.2014"},
+                 "PNL": {"Călin Popescu Tăriceanu": "02.10.2004-20.03.2009", "Crin Antonescu": "20.03.2009-31.05.2014",
+                         "Klaus Iohannis": "28.06.2014-18.12.2014", "Alina Gorghiu": "18.12.2014-12.12.2016",
+                         "Raluca Turcan (acting)": "13.12.2016-17.06.2017", "Ludovic Orban": "17.06.2017-prezent"},
+                 "PSD": {"Adrian Năstase": "16.01.2001-21.01.2005", "Mircea Geonă": "21.01.2005-21.02.2010",
+                         "Victor Ponta": "21.02.2010-12.07.2015", "Liviu Dragnea": "22.07.2015-27.05.2019",
+                         "Viorica Dăncilă (acting)": "27.05.2019-26.11.2019", "Marcel Ciolacu": "29.11.2019-prezent"},
+                 "PC": {"Dan Voiculescu": "18.12.1991-02.2010", "Daniel Constantin": "02.2010-19.06.2015"},
+                 "ALDE": {"Daniel Constantin": "19.06.2015-04.2017", "Călin Popescu Tăriceanu": "04.2017-19.10.2020"},
+                 "PRO": {"Victor Ponta": "03.09.2017-prezent"},
+                 "UNPR": {"Marian Sârbu": "05.2010-28.05.2012", "Gabriel Oprea": ("28.05-2012-03.2016",
+                                                                                  "06.2018-prezent")},
+                 "PP DD": {"Simona Man": "29.05.2012-29.06.2015"},
+                 "PRM": {"Vadim Tudor": ("20.06.1991-2005", "2005-2015"), "Corneliu Ciontu": "2005"},
+                 "USR": {"Nicuşor Dan": "27.12.2015-1.07.2017", "Dan Barna": "28.10.2017-prezent"},
+                 "PMP": {"Eugen Tomac": ("23.06.2013-08.06.2014", "30.01.2015-27.03.2016", "16.06.2018-09.12.2020"),
+                         "Elena Udrea": "08.06.2014-30.01.2015", "Traian Băsescu": "27.03.2016-16.06.2018"}}
 
-# I marked Boc as being head of PDL 2005-2012, even though one could argue that the actual boss was Basescu
-
-# on the books Daniel Constantin became the leader of the PC in 2010, but I don't buy it: Dan Voiculescu was the big
-# boss until he went to jail, so I count THAT as the real leadership turnover
-
-# Dan Diaconescu was never officially the head of PP-DD, but again, he was the real leader
-
-# the PMP boss has always been Traian Basescu: Eugen Tomac and Elena Udrea were figureheads
-
-# for all of its existence from 2015 to 2020 (when it fused with Ponta's PRO) ALDE only had one head, Tariceanu
-party_leader_changes = {2001: {"PNL", "PDL"}, 2002: {"PNL"}, 2003: {}, 2004: {"PNL"}, 2005: {"PSD", "PDL"}, 2006: {},
+# NB: I marked Boc as being head of PDL 2005-2012, even though one could argue that the actual boss was Basescu
+# NB: on the books Daniel Constantin became the leader of the PC in 2010, but Dan Voiculescu was the big boss until he
+#     went to jail (Constantin actually had a personal 200,000 unto Voiculescu), so I count Voiculescu's jailing as the
+#     real leadership turnover
+# NB: Dan Diaconescu was never officially the head of PP-DD, but again, he was the real leader, so I count his jailing
+#     as the real leadership turnover
+# NB: Gabriel Oprea was the founder and real shaker of the UNPR so I don't count the turnover from Marian Sârbu to Oprea
+#     as a real leadership turnover
+# NB: the real PMP boss has always been Traian Basescu: Eugen Tomac and Elena Udrea were always captains; consequently,
+#     I mark no leadership turnover in the PMP
+# NB: PP DD is marked as a leadership change in 2015 because Dan Diaconescu was sent to jail. Likewise the leadership
+#     change in PC in 2014 is for Voiculescu being sent to jail, and in UNPR in 2016 it's for Oprea resigning in order
+#     to stand trial in a corruption case.
+party_leader_changes = {2001: {"PNL", "PDL"}, 2002: {"PNL"}, 2003: {}, 2004: {"PNL"}, 2005: {"PSD", "PDL", "PRM"},
+                        2006: {},
                         2007: {}, 2008: {},
-                        2009: {"PNL"}, 2010: {"PSD"}, 2011: {"UDMR"}, 2012: {"PDL"}, 2013: {}, 2014: {"PNL", "PC"},
+                        2009: {"PNL"}, 2010: {"PSD"}, 2011: {"UDMR"}, 2012: {"PDL"}, 2013: {},
+                        2014: {"PNL", "PC"},
                         2015: {"PSD", "PP DD"}, 2016: {"PNL", "UNPR"},
-                        2017: {"PNL", "USR"}, 2018: {}, 2019: {"PSD"}, 2020: {}}
+                        2017: {"PNL", "USR", "ALDE"}, 2018: {}, 2019: {"PSD"}, 2020: {}}
+
+# as a robustness check, I don't use my more in-depth knowledge above and simply count formal leadership changes
+party_leader_change_by_the_books = {2001: {"PNL", "PDL"}, 2002: {"PNL"}, 2003: {}, 2004: {"PNL"},
+                                    2005: {"PSD", "PDL", "PRM"}, 2006: {},
+                                    2007: {}, 2008: {},
+                                    2009: {"PNL"}, 2010: {"PSD", "PC"}, 2011: {"UDMR"}, 2012: {"PDL", "UNPR"}, 2013: {},
+                                    2014: {"PNL", "PMP"},
+                                    2015: {"PSD", "PMP"}, 2016: {"PNL", "UNPR", "PMP"},
+                                    2017: {"PNL", "USR", "ALDE"}, 2018: {"PMP"}, 2019: {"PSD"}, 2020: {}}
 
 # often legislators give up their seats in the run-up to legislative and/or local elections, to better contest these.
 # Local elections take place several months before legislative ones, in the same year, so if you were to resign to prep
