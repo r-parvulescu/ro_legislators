@@ -8,7 +8,7 @@ import itertools
 import operator
 from data_tables.dicts.idealogical_switch_cost import ideological_pswitch_costs
 from data_tables.dicts.corruption_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
-    min_conv_old, min_conv_new, min_conv_none, media_announcement_dict_pids
+    min_conv_old, min_conv_new, min_conv_none, media_announcement_dict
 from data_tables.dicts.reference_dicts import party_name_changes, historical_regions_dict, govt_parties, \
     election_years, party_leader_changes, party_size, ethnic_parties, personality_parties
 from local import root
@@ -31,12 +31,13 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
         pers_leg_table = pers_leg_table[1:]  # skip the header
 
     # get column indexes for the person-legislature table
+    surnames_col_idx, given_names_col_idx = header.index("surnames"), header.index("given names")
     mandate_start_col_idx, mandate_end_col_idx = header.index("mandate start"), header.index("mandate end")
     pid_col_idx, seniority_col_idx = header.index("PersID"), header.index("seniority")
     leg_col_idx, chamb_col_idx = header.index("legislature"), header.index("chamber")
     const_col_idx, s_party_col_idx = header.index("constituency"), header.index("entry party code")
     p_switch_yr_col_idx, died_col_idx = header.index("first party switch year"), header.index("death status")
-    dest_party_col_idx = header.index("destination party code")
+    dest_party_col_idx, frmr_switcher_col_idx = header.index("destination party code"), header.index("former switcher")
     rank_col_idx, rank_dates_col_ind = header.index("entry ppg rank"), header.index("entry ppg rank dates")
 
     # see how many legislatures each person was ultimately in, i.e. how long their political career was across elections
@@ -44,12 +45,13 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
     for pers_leg in pers_leg_table:
         career_lens[pers_leg[pid_col_idx]] += 1
 
-    person_year_table_header = ["person_id", "legis", "legis_clock", "year", "multi_legis_parl", "senate", "constit",
+    person_year_table_header = ["person_id", "surnames", "given names", "legis", "legis_clock", "year",
+                                "multi_legis_parl", "senate", "constit",
                                 "h_region", "senior", "senior_cat", "start_party", "p_size", "p_ethnic", "p_pers",
-                                "p_govt", "pre_switch_rank", "p_switch1", "p_dest", "idlgcl_switch_cost",
-                                "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
+                                "p_govt", "pre_switch_rank", "p_switch1", "destination_party", "idlgcl_switch_cost",
+                                "former_switcher", "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
                                 "lead_conv_multi_year", "min_conv_full", "min_conv_old", "min_conv_new",
-                                "min_conv_none",  "ann_year_only", "ann_to_next_elect","ann_perm_mark"]
+                                "min_conv_none",  "ann_year_only", "ann_to_next_elect", "ann_perm_mark"]
 
     pers_yr_table = []
 
@@ -62,6 +64,9 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
             # look only at post-2000 legislatures (TODO fill in data for previous legislatures too)
             if pers_leg[leg_col_idx] in {"2000-2004", "2004-2008", "2008-2012", "2012-2016", "2016-2020"}:
+
+                # get names
+                surnames, given_names = pers_leg[surnames_col_idx], pers_leg[given_names_col_idx]
 
                 # see whether this is, ultimately, a multi-legislature parliamentarian
                 multi_legis_parl = 1 if career_lens[pers_leg[0]] > 1 else 0
@@ -83,7 +88,7 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                 pid, senior, leg, = pers_leg[pid_col_idx], pers_leg[seniority_col_idx], pers_leg[leg_col_idx]
                 senate = 1 if pers_leg[chamb_col_idx] == "SENATOR" else 0
-                const = pers_leg[const_col_idx]
+                const, former_switcher = pers_leg[const_col_idx], pers_leg[frmr_switcher_col_idx]
                 s_party, p_switch_yr = pers_leg[s_party_col_idx], pers_leg[p_switch_yr_col_idx]
 
                 # novice = first legislature; journeyman = send; master = third or more
@@ -143,11 +148,12 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                     if yr in min_conv_none and s_party in min_conv_none[yr]:
                         min_conv_no = min_conv_none[yr][s_party]
 
-                    person_year = [pid, leg, legis_clock, yr, multi_legis_parl, senate, const, h_reg, senior,
-                                   seniority_cat, s_party, s_party_size, s_party_ethnic, s_personality_party, govt,
-                                   pre_switch_rank, party_switch, dest_party, idlgcl_switch_cost,
-                                   elec_yr, leader_change, leave_early, lead_conv_one_yr,
-                                   lead_conv_multi_yr, min_conv_f, min_conv_o, min_conv_n, min_conv_no]
+                    person_year = [pid, surnames, given_names, leg, legis_clock, yr, multi_legis_parl, senate, const,
+                                   h_reg, senior, seniority_cat, s_party, s_party_size, s_party_ethnic,
+                                   s_personality_party, govt, pre_switch_rank, party_switch, dest_party,
+                                   idlgcl_switch_cost, former_switcher,  elec_yr, leader_change, leave_early,
+                                   lead_conv_one_yr, lead_conv_multi_yr, min_conv_f, min_conv_o, min_conv_n,
+                                   min_conv_no]
 
                     pers_yr_table.append(person_year)
 
@@ -166,23 +172,24 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 def ideological_switch_cost(entry_party_code, destination_party_code, year):
     """
     Looks up the party switch edge (e.g. "PC-ALDE" means "from PC to ALDE") in the edge list and returns the associated
-    edge weight, i.e. cost of switching.
+    edge weight, i.e. cost of switching. Transform the edge value into a categorical and set a default for no switching.
 
     :param entry_party_code: str
     :param destination_party_code: str
     :param year: str or int
-    :return int, 0, 1, or 2
+    :return string, "low", "medium", or "high"
     """
 
     edge = entry_party_code + "-" + destination_party_code
-
+    cost_map = {0: 'low', 1: 'medium', 2: 'high'}
     if entry_party_code != "PNL" and destination_party_code != "PNL":
-        return ideological_pswitch_costs["any period"][edge]
+        switch_cost = ideological_pswitch_costs["any period"][edge]
     else:  # edge includes PNL
         if int(year) <= 2014:
-            return ideological_pswitch_costs["pre-2014"][edge]
+            switch_cost = ideological_pswitch_costs["pre-2014"][edge]
         else:  # after 2014 (exclusive)
-            return ideological_pswitch_costs["post-2014"][edge]
+            switch_cost = ideological_pswitch_costs["post-2014"][edge]
+    return cost_map[switch_cost]
 
 
 def media_announcement_corruption(person_year_table, header):
@@ -199,28 +206,29 @@ def media_announcement_corruption(person_year_table, header):
     :return a person-year table with three extra columns relating to media reporting
     """
 
-    pid_col_idx, yr_col_idx = header.index("person_id"), header.index("year")
-    leg_col_idx = header.index("legis")
+    surnames_col_idx, given_names_col_idx = header.index("surnames"), header.index("given names")
+    leg_col_idx, yr_col_idx = header.index("legis"), header.index("year")
 
     table_with_media_reporting_columns = []
 
     for pers_year in person_year_table:
-        pid, leg, yr = int(pers_year[pid_col_idx]), pers_year[leg_col_idx], int(pers_year[yr_col_idx])
+        leg, yr = pers_year[leg_col_idx], int(pers_year[yr_col_idx])
+        fullname = pers_year[surnames_col_idx] + " " + pers_year[given_names_col_idx]
         new_cols = [0, 0, 0]  # in this order: a, b, c (see docstring for meaning of letters)
-        if pid in media_announcement_dict_pids:
-            announcement_year = int(media_announcement_dict_pids[pid].split(".")[-1])
+        if fullname in media_announcement_dict:
+            announcement_year = int(media_announcement_dict[fullname].split(".")[-1])
 
             # for all years after the announcement, inclusive
             if announcement_year <= yr:
                 new_cols[2] = 1
 
-                # for all years after the announcement (inclusive) until the final legislature year (inclusive)
-                if yr <= int(leg.split("-")[1]):  # leg in form of "2012-2016"
-                    new_cols[1] = 1
+            # for all years after the announcement (inclusive) until the final legislature year (inclusive)
+            if announcement_year <= yr <= int(leg.split("-")[1]):  # leg in form of "2012-2016"
+                new_cols[1] = 1
 
-                    # only for the calendar year of the announcement
-                    if announcement_year == yr:
-                        new_cols[0] = 1
+            # only for the calendar year of the announcement
+            if announcement_year == yr:
+                new_cols[0] = 1
 
         table_with_media_reporting_columns.append(pers_year + new_cols)
     return table_with_media_reporting_columns
