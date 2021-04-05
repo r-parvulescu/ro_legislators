@@ -115,6 +115,18 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                     dest_party = pers_leg[dest_party_col_idx] if party_switch else ""
 
+                    # since the PP DD and UNPR fused around May 2015, any PP DD -> UNPR transfers in 2015 should not
+                    # be counted as party switches
+                    if s_party == "PP DD" and dest_party == "UPPR" and int(yr) == 2015:
+                        party_switch, p_switch_yr, dest_party = 0, '', ''
+                    # likewise for the merger between PDL and PNL in 2014; any PDL-PNL moves in 2014 aren't switches
+                    if s_party == "PDL" and dest_party == "PNL" and int(yr) == 2014:
+                        party_switch, p_switch_yr, dest_party = 0, '', ''
+                    # the Conservative Party (PC) also merged with a breakaway wing of the PNL on 19 June 2015 to
+                    # form ALDE; so any PC -> ALDE moves in 2015 are NOT switches
+                    if s_party == "PC" and dest_party == "ALDE" and int(yr) == 2015:
+                        party_switch, p_switch_yr, dest_party = 0, '', ''
+
                     # get the rank of ther person within the PPG, relative to the daterange of the rank
                     lower_date = int(pers_leg[rank_dates_col_ind].split("-")[0].split(".")[1])  # in MO.YR-MO.YR format
                     upper_date = int(pers_leg[rank_dates_col_ind].split("-")[1].split(".")[1])
