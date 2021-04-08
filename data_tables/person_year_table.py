@@ -11,7 +11,7 @@ from data_tables.dicts.corruption_dicts import leader_conv_one_year, leader_conv
     min_conv_old, min_conv_new, min_conv_none, media_announcement_dict, first_conviction_appeal_possible, \
     legis_guilty_count
 from data_tables.dicts.reference_dicts import party_name_changes, historical_regions_dict, govt_parties, \
-    election_years, party_leader_changes, party_size, ethnic_parties, personality_parties
+    election_years, party_leader_changes, party_size, ethnic_parties, personality_parties, county_polit_dict
 from local import root
 
 
@@ -47,9 +47,9 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
         career_lens[pers_leg[pid_col_idx]] += 1
 
     person_year_table_header = ["person_id", "surnames", "given names", "legis", "legis_clock", "year",
-                                "multi_legis_parl", "senate", "constit",
-                                "h_region", "senior", "senior_cat", "start_party", "p_size", "p_ethnic", "p_pers",
-                                "p_govt", "pre_switch_rank", "rank_change", "p_switch1", "destination_party",
+                                "multi_legis_parl", "senate", "constit", "h_region", "senior", "senior_cat",
+                                "start_party", "p_size", "p_ethnic", "p_pers", "p_govt", "local_party_overlap",
+                                "pre_switch_rank", "rank_change", "p_switch1", "destination_party",
                                 "idlgcl_switch_cost",
                                 "former_switcher", "elect_year", "lead_change", "leave_early", "lead_conv_one_year",
                                 "lead_conv_multi_year", "min_conv_full", "min_conv_old", "min_conv_new",
@@ -111,11 +111,11 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                 for idx, yr in enumerate(years_in_leg):
                     legis_clock = idx + 1
                     govt = govt_parties[yr][s_party]
+                    local_party_overlap = get_local_govt_parties(leg, const, s_party)
                     party_switch = 1 if p_switch_yr and int(yr) == int(p_switch_yr) else 0
                     elec_yr = 1 if int(yr) in election_years else 0
                     leader_change = 1 if yr in party_leader_changes and s_party in party_leader_changes[yr] else 0
                     leave_early = 1 if yr == last_year_in_leg and last_month_in_leg <= 5 else 0
-
                     dest_party = pers_leg[dest_party_col_idx] if party_switch else ""
 
                     # since the PP DD and UNPR fused around May 2015, any PP DD -> UNPR transfers in 2015 should not
@@ -150,9 +150,9 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                     person_year = [pid, surnames, given_names, leg, legis_clock, yr, multi_legis_parl, senate, const,
                                    h_reg, senior, seniority_cat, s_party, s_party_size, s_party_ethnic,
-                                   s_personality_party, govt, pre_switch_rank, party_switch, dest_party,
-                                   idlgcl_switch_cost, former_switcher,  elec_yr, leader_change, leave_early,
-                                   lead_conv_one_yr, lead_conv_multi_yr, mconv_full, mconv_old, mconv_new,
+                                   s_personality_party, govt, local_party_overlap, pre_switch_rank, party_switch,
+                                   dest_party, idlgcl_switch_cost, former_switcher,  elec_yr, leader_change,
+                                   leave_early, lead_conv_one_yr, lead_conv_multi_yr, mconv_full, mconv_old, mconv_new,
                                    mconv_none, others_legs_conv_full, pconv_appeal_same_yr, pconv_appeal_to_elec,
                                    pconv_appeal_pmark]
 
@@ -173,6 +173,43 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header, multi_year_only=True)
 
 
+def get_local_govt_parties(legislature, constituency, own_party):
+    """
+    It may matter for a legislator's switch decision what the political alignment of the local government in their
+    constituency is, because (a) legislative politicians may have local ambitions, and especially (b) local executives
+    tend to control much of the pork that a legislators would want to send, guide, apply, etc.
+
+    In Romanian both the county council (whose majority is represented by the council president) and the mayor of the
+    city that is the county seat (always the largest in the county) are important figures in local politics with
+    significant discretionary budget and political powers. Therefore, if in any given year the legislator's party is
+    the same as that of BOTH the county council president AND the county seat mayor, we give a value of "full overlap."
+    If only one of the two figures align with the legislator's party then it's a "partial overlap" and if none align
+    then there is "no overlap."
+
+    :param legislature: str, e.g. "2008-2012"
+    :param constituency: str, e.g. "CLUJ"
+    :param own_party: the party code of the legislator in this year, e.g. PDL
+    :return str: full overlap, partial overlap, no overlap
+    """
+
+    # for now I only have data on local politics for these three legislatures
+    if legislature not in {"2008-2012", "2012-2016", "2016-2020"}:
+        return ""
+
+    cc_pres_party = county_polit_dict[legislature][constituency]["CC Pres"]
+    cs_mayor_party = county_polit_dict[legislature][constituency]["CS Mayor"]
+
+    if own_party == cc_pres_party and own_party == cs_mayor_party:
+        return "full overlap"
+    elif own_party == cc_pres_party or own_party == cs_mayor_party:
+        return "partial overlap"
+    else:
+        return "no overlap"
+
+    # TODO do this also with a different measure, namely whether local party figures are in the governing coalition,
+    #  regardless of whether or not they're one's own party
+
+
 def get_convictions_data(yr, s_party):
     """Get convictions data by checking external conviction dictionaries. Return a dict of information on convictions"""
 
@@ -187,7 +224,7 @@ def get_convictions_data(yr, s_party):
         conviction_dict["lead_conv_multi_year"] = 1
 
     if yr in min_conv_full and s_party in min_conv_full[yr]:
-        conviction_dict["min_conv_f"] = min_conv_full[yr][s_party]
+        conviction_dict["min_conv_full"] = min_conv_full[yr][s_party]
 
     if yr in min_conv_old and s_party in min_conv_old[yr]:
         conviction_dict["min_conv_old"] = min_conv_old[yr][s_party]
@@ -258,6 +295,9 @@ def rank_change(person_year_table, header):
     """
     Sees how one's rank within the first parliamentary party group has changed between years.
 
+    NB: by combining person-years in the first year (who by definition cannot have been demoted) with those in the
+        who do not move even when they can, this thing committs a pretty big fudge. I do  it to get a rough sense.
+
     :param person_year_table:
     :param header:
     :return:
@@ -293,7 +333,7 @@ def rank_change(person_year_table, header):
                     else:  # rank_dict[current_rank] < rank_dict[previous_rank]:
                         delta_rank = "decrease"
                 else:  # first year of legislature, no rank change was possible
-                    delta_rank = "first year"
+                    delta_rank = "no change"
                 py_table_with_rank_change.append(pers_yr[:rank_col_idx+1] + [delta_rank] + pers_yr[rank_col_idx+1:])
     return py_table_with_rank_change
 
