@@ -355,9 +355,9 @@ final_guilty_verdict = {'BIVOLARU Gabriel': '01.04.2004',
                         'URSĂRESCU Dorinel': '07.06.2020',
                         'CHIRU Gigi Christian': '13.11.2017',
                         'NICOLESCU Theodor Cătălin': '08.10.2019',
-                        'THUMA Hubert Petru Ştefan': "22.11.2013",
+                        'THUMA Hubert Petru Ştefan': "14.10.2014",
                         'GIREADĂ Dumitru Verginel': "05.04.2012",
-                        'MUNTEAN Mircia': "08.07.2013",
+                        'MUNTEAN Mircia': "24.09.2013",
                         'DRĂGHICI Mircea Gheorghe': '15.10.2020',
                         'GHEORGHIU Viorel': '04.06.2008'}
 
