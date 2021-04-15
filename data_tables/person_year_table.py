@@ -9,9 +9,9 @@ import operator
 from data_tables.dicts.idealogical_switch_cost import ideological_pswitch_costs
 from data_tables.dicts.corruption_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
     min_conv_old, min_conv_new, min_conv_none, media_announcement_dict, first_conviction_appeal_possible, \
-    legis_guilty_count
+    final_guilty_verdict, legis_guilty_count
 from data_tables.dicts.reference_dicts import party_name_changes, historical_regions_dict, govt_parties, \
-    election_years, party_leader_changes, party_size, ethnic_parties, personality_parties, county_polit_dict
+    election_years, party_leader_changes, ppg_size, ethnic_parties, personality_parties, county_polit_dict
 from local import root
 
 
@@ -88,7 +88,6 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                 last_year_in_leg = int(pers_leg[mandate_end_col_idx].split('-')[0])
                 last_month_in_leg = int(pers_leg[mandate_end_col_idx].split('-')[1])
                 years_in_leg = list(range(first_year_in_leg, last_year_in_leg + 1))
-
                 pid, senior, leg, = pers_leg[pid_col_idx], pers_leg[seniority_col_idx], pers_leg[leg_col_idx]
                 senate = 1 if pers_leg[chamb_col_idx] == "SENATOR" else 0
                 const, former_switcher = pers_leg[const_col_idx], pers_leg[frmr_switcher_col_idx]
@@ -104,12 +103,12 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                     s_party = party_name_changes[s_party]
 
                 h_reg = historical_regions_dict[const]
-                s_party_size = party_size[leg][s_party]
                 s_party_ethnic = 1 if s_party in ethnic_parties else 0
                 s_personality_party = 1 if s_party in personality_parties else 0
 
                 for idx, yr in enumerate(years_in_leg):
                     legis_clock = idx + 1
+                    s_ppg_size = get_ppg_size(s_party, senate, yr, leg, pool_chambers=True) if yr > 2008 else ""
                     govt = govt_parties[yr][s_party]
                     local_party_overlap = get_local_govt_parties(leg, const, s_party)
                     party_switch = 1 if p_switch_yr and int(yr) == int(p_switch_yr) else 0
@@ -122,8 +121,8 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                     # be counted as party switches
                     if s_party == "PP DD" and dest_party == "UPPR" and int(yr) == 2015:
                         party_switch, p_switch_yr, dest_party = 0, '', ''
-                    # likewise for the merger between PDL and PNL in 2014; any PDL-PNL moves in 2014 aren't switches
-                    if s_party == "PDL" and dest_party == "PNL" and int(yr) == 2014:
+                    # likewise for the merger between PDL and PNL in 2015; any PDL-PNL moves in 2015 aren't switches
+                    if s_party == "PDL" and dest_party == "PNL" and int(yr) == 2015:
                         party_switch, p_switch_yr, dest_party = 0, '', ''
                     # the Conservative Party (PC) also merged with a breakaway wing of the PNL on 19 June 2015 to
                     # form ALDE; so any PC -> ALDE moves in 2015 are NOT switches
@@ -149,9 +148,9 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                     pconv_appeal_pmark = self_convicted_appeal(surnames, given_names, yr, leg, "permanent mark")
 
                     person_year = [pid, surnames, given_names, leg, legis_clock, yr, multi_legis_parl, senate, const,
-                                   h_reg, senior, seniority_cat, s_party, s_party_size, s_party_ethnic,
+                                   h_reg, senior, seniority_cat, s_party, s_ppg_size, s_party_ethnic,
                                    s_personality_party, govt, local_party_overlap, pre_switch_rank, party_switch,
-                                   dest_party, idlgcl_switch_cost, former_switcher,  elec_yr, leader_change,
+                                   dest_party, idlgcl_switch_cost, former_switcher, elec_yr, leader_change,
                                    leave_early, lead_conv_one_yr, lead_conv_multi_yr, mconv_full, mconv_old, mconv_new,
                                    mconv_none, others_legs_conv_full, pconv_appeal_same_yr, pconv_appeal_to_elec,
                                    pconv_appeal_pmark]
@@ -171,6 +170,47 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header)
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header, multi_year_only=True)
+
+
+def get_ppg_size(s_party, senator, yr, legis, pool_chambers=True):
+    """
+    Get the size of a legislator's PPG, counted at the start of a calendar year.
+
+    NB: only has data from 2009 to 2020 (inclusive)
+
+    :param s_party: str, e.g. "PSD"
+    :param senator: int, 1 if a senator 0 if a member of the lower house, the chamber of deputies
+    :param yr: str or int, e.g. 2013
+    :param legis: str, e.g. "2008-2012"
+    :param pool_chambers: bool, whether to pool the PPG sizes of the Senate and Chamber of Deputies; True by default
+    :return: int, the size of the PPG at the beginning of that calendar year
+    """
+
+    # NB: certain parties ran in electoral alliances and then caucused together, for at least part of a legislature.
+    #     The dict below shows which small parties were in which caucuses, and when.
+    small_party_caucus_switch = {"PC": {"2008-2012": {"ppg switch date": "02.2011",
+                                                      "pre switch ppg": "PSD",
+                                                      "post switch ppg": "PNL"}},
+                                 "UNPR": {"2012-2016": {"ppg switch date": "02.2016",
+                                                        "pre switch ppg": "PSD",
+                                                        "post switch ppg": "UNPR"}}
+                                 }
+    if s_party in small_party_caucus_switch:
+        if legis in small_party_caucus_switch[s_party]:
+            # NB: by convention, I take all years before (INCLUDING the switch year) as pre switch ppg years
+            switch_year = int(small_party_caucus_switch[s_party][legis]["ppg switch date"].split(".")[-1])
+            if yr <= switch_year:
+                s_party = small_party_caucus_switch[s_party][legis]["pre switch ppg"]
+            else:
+                s_party = small_party_caucus_switch[s_party][legis]["post switch ppg"]
+
+    ppg_size_senat = ppg_size[yr]["SENAT"][s_party] if s_party != "MIN" else 0
+    ppg_size_cdep = ppg_size[yr]["CDEP"][s_party]
+
+    if pool_chambers:
+        return ppg_size_senat + ppg_size_cdep
+    else:
+        return ppg_size_senat if senator else ppg_size_cdep
 
 
 def get_local_govt_parties(legislature, constituency, own_party):
@@ -247,6 +287,9 @@ def self_convicted_appeal(surnames, given_names, yr, legis, condition):
     for different conditions of oneself having been convicted with possibility of appeal. If no conditions are met,
     return 0.
 
+    NB: we need to be careful throughout not to count people who received a final conviction, i.e. one not subject to
+        appeal
+
     :param surnames: str
     :param given_names: str
     :param yr: str or int, e.g. 2014, "2015"
@@ -257,13 +300,19 @@ def self_convicted_appeal(surnames, given_names, yr, legis, condition):
     fullname = surnames + " " + given_names
     last_legis_year = int(legis.split("-")[1])
     if fullname in first_conviction_appeal_possible:
-        conv_date = first_conviction_appeal_possible[fullname].split(".")  # comes in "DAY.MO.YR" format
-        conv_month, conv_year = conv_date[1], int(conv_date[2])
-        if condition == "same year" and int(yr) == conv_year:
+        first_conv_date = first_conviction_appeal_possible[fullname].split(".")  # comes in "DAY.MO.YR" format
+        first_conv_month, first_conv_year = first_conv_date[1], int(first_conv_date[2])
+
+        # ignore everyone who got their final conviction in this year or earlier; again, date in DAY.MO.YR format
+        if fullname in final_guilty_verdict and int(final_guilty_verdict[fullname].split(".")[-1]) <= int(yr):
+            return 0
+
+        if condition == "same year" and int(yr) == first_conv_year:
             return 1
-        if condition == "until next election" and conv_year <= int(yr) <= last_legis_year:
+
+        if condition == "until next election" and first_conv_year <= int(yr) <= last_legis_year:
             return 1
-        if condition == "permanent mark" and conv_year <= int(yr):
+        if condition == "permanent mark" and first_conv_year <= int(yr):
             return 1
     return 0
 
@@ -325,7 +374,7 @@ def rank_change(person_year_table, header):
         for p_leg in pers_legs:
             for idx, pers_yr in enumerate(p_leg):
                 if idx > 0:
-                    current_rank, previous_rank = pers_yr[rank_col_idx], p_leg[idx-1][rank_col_idx]
+                    current_rank, previous_rank = pers_yr[rank_col_idx], p_leg[idx - 1][rank_col_idx]
                     if rank_dict[current_rank] > rank_dict[previous_rank]:
                         delta_rank = "increase"
                     elif rank_dict[current_rank] == rank_dict[previous_rank]:
@@ -334,7 +383,7 @@ def rank_change(person_year_table, header):
                         delta_rank = "decrease"
                 else:  # first year of legislature, no rank change was possible
                     delta_rank = "no change"
-                py_table_with_rank_change.append(pers_yr[:rank_col_idx+1] + [delta_rank] + pers_yr[rank_col_idx+1:])
+                py_table_with_rank_change.append(pers_yr[:rank_col_idx + 1] + [delta_rank] + pers_yr[rank_col_idx + 1:])
     return py_table_with_rank_change
 
 
