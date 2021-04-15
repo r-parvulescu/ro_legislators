@@ -63,26 +63,6 @@ party_size_after_election_cdep = {2000: {"UDMR": 27, "PSD": 155, "PNL": 30, "PDL
                                          "PP DD": 47},
                                   2016: {"UDMR": 21, "PSD": 154, "PNL": 69, "PMP": 18, "USR": 30, "ALDE": 20}}
 
-# since this paper focuses strictly on strategic party switches, we want to avoid "forced" switches caused by
-# the dissolution of PPGs, either because they no longer have the minimum number of members or because they merged
-# with another party. The latter situation is already handled upstream to some extent but I'll include all cases here
-# for completeness
-# NB: PSDR and PSM in the lower house merged in September of 1996
-# NB: for the 2004-2008 legislature the PNL and PD sat together as the D.A. alliance group only in the senate, until
-#     they broke up in 2007. Since they were voted by their separate partis and then simply became party-based PPGs
-#     (not the alliance) I do not count it as a PPG break-up
-ppg_end_dates = {"1990-1992": {"SENAT": {}, "CDEP": {}},
-                 "1992-1996": {"SENAT": {"OCL": "01.09.1993"}, "CDEP": {"PSDR": "02.09.1996",
-                                                                        "PSM": "10.09.1996",
-                                                                        "PAC": "29.06.1993"}},
-                 "1996-2000": {"SENAT": {}, "CDEP": {"PSDR": "25.03.1999"}},
-                 "2000-2004": {"SENAT": {}, "CDEP": {}},
-                 "2004-2008": {"SENAT": {}, "CDEP": {}},
-                 "2008-2012": {"SENAT": {}, "CDEP": {}},
-                 "2012-2016": {"SENAT": {"PDL": "02.02.2015", "PP DD": "03.02.2014", "UNPR": "28.06.2016"},
-                               "CDEP": {"PP DD": "22.12.2015", "PDL": "02.02.2015"}},
-                 "2016-2020": {"SENAT": {"ALDE": "11.09.2019", "PMP": "04.06.2018"}, "CDEP": {"ALDE": "10.02.2020"}}}
-
 # I do not distinguish parliamentary party size by chamber because there is little inter-chamber variance, and that
 # because the electoral system for the two chambers is identical, except senators represent roughly double the number
 # of people that deputies do. NB: the Minorities group is only in the lower house and always has 15-18 people.
@@ -97,6 +77,7 @@ party_size_cat = {"2000-2004": {"UDMR": "small", "PSD": "large", "PNL": "small",
                   "2016-2020": {"UDMR": "small", "PSD": "large", "PNL": "midling", "PMP": "small",
                                 "ALDE": "small", "USR": "small", "MIN": "small"}
                   }
+
 # here I write down the yearly PPG size AT THE BEGINNING OF THE YEAR. Note that a size of zero means that the PPG
 # has stopped existing, or hasn't yet been founded
 ppg_size = {2009: {"SENAT": {"PSD": 48, "PNL": 28, "PDL": 51, "UDMR": 9, "UNPR": 0},
@@ -130,6 +111,26 @@ ppg_size = {2009: {"SENAT": {"PSD": 48, "PNL": 28, "PDL": 51, "UDMR": 9, "UNPR":
                    "CDEP": {"PSD": 127, "PNL": 71, "UDMR": 21, "ALDE": 23, "PMP": 13, "USR": 28,
                             "PRO": 28, "MIN": 17}},
             }
+
+# since this paper focuses strictly on strategic party switches, we want to avoid "forced" switches caused by
+# the dissolution of PPGs, either because they no longer have the minimum number of members or because they merged
+# with another party. The latter situation is already handled upstream to some extent but I'll include all cases here
+# for completeness
+# NB: PSDR and PSM in the lower house merged in September of 1996
+# NB: for the 2004-2008 legislature the PNL and PD sat together as the D.A. alliance group only in the senate, until
+#     they broke up in 2007. Since they were voted by their separate partis and then simply became party-based PPGs
+#     (not the alliance) I do not count it as a PPG break-up
+ppg_end_dates = {"1990-1992": {"SENAT": {}, "CDEP": {}},
+                 "1992-1996": {"SENAT": {"OCL": "01.09.1993"}, "CDEP": {"PSDR": "02.09.1996",
+                                                                        "PSM": "10.09.1996",
+                                                                        "PAC": "29.06.1993"}},
+                 "1996-2000": {"SENAT": {}, "CDEP": {"PSDR": "25.03.1999"}},
+                 "2000-2004": {"SENAT": {}, "CDEP": {}},
+                 "2004-2008": {"SENAT": {}, "CDEP": {}},
+                 "2008-2012": {"SENAT": {}, "CDEP": {}},
+                 "2012-2016": {"SENAT": {"PDL": "02.02.2015", "PP DD": "03.02.2014", "UNPR": "28.06.2016"},
+                               "CDEP": {"PP DD": "22.12.2015", "PDL": "02.02.2015"}},
+                 "2016-2020": {"SENAT": {"ALDE": "11.09.2019", "PMP": "04.06.2018"}, "CDEP": {"ALDE": "10.02.2020"}}}
 
 gov_coalition_senior_partner = {"2000-2004": {"UDMR": '',
                                               "PSD": '28.12.2000-21.12.2004',
