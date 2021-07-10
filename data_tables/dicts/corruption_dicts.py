@@ -1,62 +1,64 @@
 """
-These are dictionaries indicating which ministers and/or party leaders were convicted when. The dictionaries differ
-because we can give different interpretations to the signal that such convictions send to fellow legislators.
+These are dictionaries indicating which party leaders, ministers, and legislators were convicted (and when), or
+alternatively when they were first mentioned in the media. were convicted when.
 
-WITH RESPECT TO CONVICTED CURRENT PARTY LEADERS
+Different conviction signals can be interpreted in different ways by fellow legislators. Some possibilities are:
 
-There are two ways of interpreting the conviction: either it messes up the internal party networks in the year in which
-it occurs, or it does so permanently until the next legislative elections reset internal party struggles. Therefore:
+WHEN CURRENT PARTY LEADERS ARE CONVICTED
 
  (A) leader removal via conviction matters only in the year of conviction
+        - the bad press doesn't stick
 
  (B) leader removal via conviction matters for all years after the conviction, until the next election
+        - bad press sticks until an election
 
-There are several other judgement calls here. First, I assume that Dan Diaconescu and Dan Voiculescu were the de facto
-leaders of their parties (PP DD and PC, respectively) and that the official party leaders were puppets. Second, UNPR's
-Gabriel Oprea resigned from parliament and the party leadership not because he was convicted, but because he was under
-investigation by the DNA. All these judgement calls suggest the following robustness tests:
+ (C) leader removal via conviction matter for all subsequent years, elections not withstanding
+        - bad press sticks forever
+
+I make some assumptions specific to Romanian party leaders. First, I assume that Dan Diaconescu and Dan Voiculescu
+were the de facto leaders of their parties (PP DD and PC, respectively) and that the official party leaders were
+puppets, i.e. not the real party leaders. Second, that the investigation of Gabriel Oprea by the DNA, which led to his
+resignation from both the leadership of the UNPR (the party he founded) and his seat in parliament, can be treated as
+a conviction for signalling purposes. To ensure robustness against these substantive judgement calls, I must:
 
  (C) initially include all of PP DD, PC, and UNPR, then remove them one at a time and see effects on the results.
 
-Consequently, I code in two cases (A) and (B), then implement (C) in the r code.
 
-WITH RESPECT TO CONVICTED CURRENT/FORMER MINISTERS
+WHEN CURRENT/FORMER MINISTERS AND/OR LEGISLATORS ARE CONVICTED
 
-There are several ways in which one could interpret the messages sent by conviction of a current/former minister
+ 1) all legislators who ever were or still are in the party of the convicted get spooked
+        - "if this could happen to one of our own, it could happen to me."
 
- 1) all of that minister's party colleagues, past and present and of whichever party, interpret this as "if this could
-    happen to one of our ministers, it could happen to me."
+ 2) only legislators who were PARTY COLLEAGUES with the convicted while the convicted was in office will be spooked
+        - "if they could pin my current/former colleague, they might pin me."
+        - NB: for ministers colleague-ship is assumed to mean "we were in the same party when the current/former
+              minister was in ministerial office;" this tends to be a shorter period than mere party co-membership
 
- 2) only the people in the party of which the minister was a part of WHILE in ministerial office will get the message
-    "if they could pin a minister, they might pin me for what I did when I was in that party, in that time."
+ 3) only people in the current party of the convicted get spooked
+        - "after that person left their former party and came to us they lost their former party's protection; our
+           party isn't strong enough to cover this convicted person, so our party is also too weak to cover me me."
 
- 3) only people in the current party might get the message, i.e. "after that minister left their former party and came
-    to us they lost the former party's protection, and our party isn't strong enough to give this indicted minister
-    cover, so our party wouldn't be strong enough to back me."
+ 4) the people in the current party of the convicted are not spooked
+        - "I'm safe: this is just revenge from the party that the minister left, and not a statement about our party's
+           general ability to protect its own."
 
- 4) the people in the current party (in which the minister did NOT serve while they were minister) conclude that they
-    personally are safe, since this is really just revenge from the party that the minister left, and not a general
-    statement about the new party's ability to protect its people from convictions. Consequently, when a minister who
-    changed parties is convicted, nobody gets any message: both old and new party colleagues think "serves them right."
+Each of (1) - (4) needs to be a different variable, and a different possibility
 
- 5) a second(plus) conviction of the same person may not send much of a message: the first conviction already drove
-    home the point, subsequent convictions do not contribute new information
+ONE MORE COMPLICATION
 
- 6) additional convictions of different people from the same party contribute to the signal: it matters whether one,
-    two, or three former ministers from the same party were convicted in the same time period.
+ I) it's unclear whether second (or more) convictions send additive messages: the first conviction may have already
+    driven home the point, so subsequent convictions will not contribute new information. Or not.
+        i) additional convictions may target one and the same person
+        ii) additional convictions may target different individuals
 
- 7) PDL stopped existing in 2015 after its decisive internal split, with some PDL members going to PNL and others into
-    the wilds or to PMP. Thus it's unclear who after 2015 would get the message of a former PDL minister being
-    convicted: perhaps old colleagues now in other parties, but that's a series of uncertain judgement calls. The
-    conservative coding decision is to just through out post-2015 PDL signals
+I assume that additional convictions of the same person do not add more information, so I ignore (i). More convictions
+of different people may, however, be consequential. In practice this will not matter for ministers since, for any given
+party, very few were convicted in any given year. It may, however, matter for legislators.
 
-Below I assume that (5), (6), and (7) are true: the second conviction of the same person doesn't matter, the first
-convictions of multiple people do add up, and we throw out post-2015 PDL signals. That said, with respect to (6) I don't
-discriminate between two or three convictions of different people in the same year: the scale is 0, 1, 2, where "2"
-actually means "2+", so it's a sort-of ordinal scale, and is treated numerically, i.e. NOT as factors. It's  bit of a
-fudge, gradnted, but IMO justified by the fact that three convictions from the same party in one year are very rare.
+We will therefore need to check results against two variables: one that's a binary for "party colleagues convicted in
+this year," and another for "category of party colleagues convicted in this year," with levels [zero, one, two+]
 
-I run each of (1)-(4) as a separate robustness test.
+.
 
 """
 
