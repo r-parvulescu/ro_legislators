@@ -41,7 +41,8 @@ party_leaders = {"PAR": {"Victor Surdu": "29.01.1990-28.06,1997", "Mihai Berca":
                  "PRM": {"Vadim Tudor": ("20.06.1991-2005", "2005-2015"), "Corneliu Ciontu": "2005"},
                  "USR": {"Nicuşor Dan": "27.12.2015-1.07.2017", "Dan Barna": "28.10.2017-prezent"},
                  "PMP": {"Eugen Tomac": ("23.06.2013-08.06.2014", "30.01.2015-27.03.2016", "16.06.2018-09.12.2020"),
-                         "Elena Udrea": "08.06.2014-30.01.2015", "Traian Băsescu": "27.03.2016-16.06.2018"}}
+                         "Elena Udrea": "08.06.2014-30.01.2015", "Traian Băsescu": "27.03.2016-16.06.2018"},
+                 "MIN": {}}
 
 # NB: I marked Boc as being head of PDL 2005-2012, even though one could argue that the actual boss was Basescu
 # NB: on the books Daniel Constantin became the leader of the PC in 2010, but Dan Voiculescu was the big boss until he
