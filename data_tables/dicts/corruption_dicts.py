@@ -12,8 +12,8 @@ WHEN CURRENT PARTY LEADERS ARE CONVICTED
  (B) leader removal via conviction matters for all years after the conviction, until the next election
         - bad press sticks until an election
 
- (C) leader removal via conviction matter for all subsequent years, elections not withstanding
-        - bad press sticks forever
+NB: bad press could also stick forever, but given my prior knowledge of the Romanian scene I nix this possibility: it
+    looks like elections and some time in opposition genuinely wash out former bad reputation, to a large extent
 
 I make some assumptions specific to Romanian party leaders. First, I assume that Dan Diaconescu and Dan Voiculescu
 were the de facto leaders of their parties (PP DD and PC, respectively) and that the official party leaders were
@@ -26,39 +26,30 @@ a conviction for signalling purposes. To ensure robustness against these substan
 
 WHEN CURRENT/FORMER MINISTERS AND/OR LEGISLATORS ARE CONVICTED
 
- 1) all legislators who ever were or still are in the party of the convicted get spooked
-        - "if this could happen to one of our own, it could happen to me."
+Only legislators who were PARTY COLLEAGUES with the convicted while the convicted was in office will be spooked
+    - "if they could pin my current/former colleague, they might pin me."
+    - NB: for ministers colleague-ship is assumed to mean "we were in the same party when the current/former
+          minister was in ministerial office;" this tends to be a shorter period than mere party co-membership
 
- 2) only legislators who were PARTY COLLEAGUES with the convicted while the convicted was in office will be spooked
-        - "if they could pin my current/former colleague, they might pin me."
-        - NB: for ministers colleague-ship is assumed to mean "we were in the same party when the current/former
-              minister was in ministerial office;" this tends to be a shorter period than mere party co-membership
-
- 3) only people in the current party of the convicted get spooked
-        - "after that person left their former party and came to us they lost their former party's protection; our
-           party isn't strong enough to cover this convicted person, so our party is also too weak to cover me me."
-
- 4) the people in the current party of the convicted are not spooked
-        - "I'm safe: this is just revenge from the party that the minister left, and not a statement about our party's
-           general ability to protect its own."
-
-Each of (1) - (4) needs to be a different variable, and a different possibility
-
-ONE MORE COMPLICATION
-
- I) it's unclear whether second (or more) convictions send additive messages: the first conviction may have already
-    driven home the point, so subsequent convictions will not contribute new information. Or not.
-        i) additional convictions may target one and the same person
-        ii) additional convictions may target different individuals
+But, it's unclear whether second (or more) convictions send additive messages: the first conviction may have already
+driven home the point, so subsequent convictions will not contribute new information. Or not.
+    i) additional convictions may target one and the same person
+    ii) additional convictions may target different individuals
 
 I assume that additional convictions of the same person do not add more information, so I ignore (i). More convictions
 of different people may, however, be consequential. In practice this will not matter for ministers since, for any given
 party, very few were convicted in any given year. It may, however, matter for legislators.
 
 We will therefore need to check results against two variables: one that's a binary for "party colleagues convicted in
-this year," and another for "category of party colleagues convicted in this year," with levels [zero, one, two+]
+this year," and another for "category of party colleagues convicted in this year," with levels [zero, one, two+].
 
-.
+NB: things are probably more complicated because former colleagues (who are no longer either in parliament or politics)
+    may be convicted, sending a signal to current office-holders. These possibilities introduce so many unknowns
+    (e.g. how can we tell whether someone is genuinely retired from politics? How long before a former membership stops
+    being relevant?) that I ignore them, and just go with the certain thing: having actually been in the same party,
+    at the same time with the convicted.
+
+NB: for building the colleagueship dictionary see party_colleagues.py
 
 """
 
@@ -92,9 +83,9 @@ leader_conv_multi_year = {2014: ("PC"),
 # NB: Dan Ioan Popescu was minister in th PSD government, and then deputy for PC before being convicted. I code him here
 #     as having belonged to both groups, since his conviction could send messages to colleagues in both parties that
 #     they're not safe
-# NB: Monica Iacob Ridzi also went from PDL (duing which she was minister), to PPDD, to UNPR (by 2014) before losing her
-#     seat because she went to jail. Consequently, I mark her in all three parties, on account of she sent a message to
-#     all.
+# NB: Monica Iacob Ridzi also went from PDL (during which she was minister), to PPDD, to UNPR (by 2014) before losing
+#     her seat because she went to jail. Consequently, I mark her in all three parties, on account of she sent a
+#     message to all.
 # NB: Liviu Dragnea was part of PDL until 2001 when he was still in local politics. I do not mark this, since it was
 #     both further ago in time than other cases, and because all of this preceded his first ministerial post by eight
 #     years.
@@ -102,6 +93,8 @@ leader_conv_multi_year = {2014: ("PC"),
 # NB: Gabriel Berca was in PDL (as minister) then in PNL. I mark him for both.
 # NB: Elena Udrea was part of PDL (as minister) then PMP. I mark her as both.
 
+
+# TODO put in minister fullnames as they appear in the table
 convicted_ministers_names = {2011: {"PSD": "Dan Ioan Popescu",
                                     "PC": "Dan Ioan Popescu"},
                              2012: {"PSD": "Adrian Năstase"},
@@ -116,7 +109,7 @@ convicted_ministers_names = {2011: {"PSD": "Dan Ioan Popescu",
                                     "UNPR": "Monica Iacob Ridzi",
                                     "UDMR": "Zsolt Nagy"},
                              2016: {"PNL": ("Corneliu Dobriţoiu", "Relu Fenechiu", "Sorin Frunzăverde"),
-                                    "PDL": ("Gabriel Sandu", "Soring Frunzăverde", "Stelian Fuia"),
+                                    "PDL": ("Gabriel Sandu", "Sorin Frunzăverde", "Stelian Fuia"),
                                     "PC": "Ioan Codruţ Sereş",
                                     "PSD": "Nicolae Liviu Dragnea"},
                              2017: {"PDL": "Gabriel Berca",
@@ -127,42 +120,7 @@ convicted_ministers_names = {2011: {"PSD": "Dan Ioan Popescu",
                              2019: {"PSD": "Nicolae Liviu Dragnea"}
                              }
 
-# apply rule (1), full signal
-min_conv_full = {2011: {"PC": 1, "PSD": 1},
-                 2012: {"PSD": 1},
-                 2013: {"PNL": 1},
-                 2014: {"PNL": 2, "PC": 1, "UDMR": 1},
-                 2015: {"PC": 1, "PSD": 1, "PDL": 1, "UNPR": 1},
-                 2016: {"PNL": 2, "PSD": 1},
-                 2017: {"PNL": 1},
-                 2018: {"PSD": 2, "PMP": 1}}
-
-# apply rule (2), signal only reaches old party colleagues
-min_conv_old = {2011: {"PSD": 1},
-                2012: {"PSD": 1},
-                2013: {"PNL": 1},
-                2014: {"PNL": 2, "PC": 1, "UDMR": 1},
-                2015: {"PC": 1, "PSD": 1, "PDL": 1},
-                2016: {"PNL": 2, "PSD": 1},
-                2018: {"PSD": 2}}
-
-# apply rule (3), signal only reaches new party colleagues
-min_conv_new = {2011: {"PC": 1},
-                2012: {"PSD": 1},
-                2013: {"PNL": 1},
-                2014: {"PNL": 2, "PC": 1, "UDMR": 1},
-                2015: {"PC": 1, "PSD": 1, "PDL": 1, "UNPR": 1},
-                2016: {"PNL": 2, "PSD": 1},
-                2017: {"PNL": 1},
-                2018: {"PSD": 2, "PMP": 1}}
-
-# apply rule (4), signals from party-switching former ministers are not consequential, i.e. reach nobody
-min_conv_none = {2012: {"PSD": 1},
-                 2013: {"PNL": 1},
-                 2014: {"PNL": 2, "PC": 1, "UDMR": 1},
-                 2015: {"PC": 1, "PSD": 1},
-                 2016: {"PNL": 2, "PSD": 1},
-                 2018: {"PSD": 2}}
+# TODO make dict where we mark down the ministerial term, i.e. when they were actually minister
 
 """
 The following dictionary shows, per person, the first date for which we could find media mentions (via Google searches)
