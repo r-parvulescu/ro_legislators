@@ -7,11 +7,13 @@ import csv
 import itertools
 import operator
 from data_tables.dicts.idealogical_switch_cost import ideological_pswitch_costs
-from data_tables.dicts.corruption_dicts import leader_conv_one_year, leader_conv_multi_year, min_conv_full, \
-    min_conv_old, min_conv_new, min_conv_none, media_announcement_dict, first_conviction_appeal_possible, \
-    final_guilty_verdict, legis_guilty_count
-from data_tables.dicts.reference_dicts import party_name_changes, historical_regions_dict, govt_parties, \
-    election_years, party_leader_changes, ppg_size, ethnic_parties, personality_parties, county_polit_dict
+from data_tables.dicts.govt_member import govt_parties
+from data_tables.dicts.party_leaders import party_leader_changes
+from data_tables.dicts.county_politics import county_polit_dict
+from data_tables.dicts.corruption_dicts import leader_conv_one_year, leader_conv_multi_year, \
+    first_conviction_appeal_possible, final_guilty_verdict, legis_guilty_count
+from data_tables.dicts.reference_dicts import party_name_changes, historical_regions_dict, election_years, ppg_size, \
+    ethnic_parties, personality_parties
 from local import root
 
 
@@ -39,7 +41,6 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
     const_col_idx, s_party_col_idx = header.index("constituency"), header.index("entry party code")
     p_switch_yr_col_idx, died_col_idx = header.index("first party switch year"), header.index("death status")
     dest_party_col_idx, frmr_switcher_col_idx = header.index("destination party code"), header.index("former switcher")
-    rank_col_idx, rank_dates_col_ind = header.index("entry ppg rank"), header.index("entry ppg rank dates")
 
     # see how many legislatures each person was ultimately in, i.e. how long their political career was across elections
     career_lens = {pers_leg[pid_col_idx]: 0 for pers_leg in pers_leg_table}
@@ -65,8 +66,10 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
         # simplicity since we don't need to do multiple-outcome survival models
         if pers_leg[died_col_idx] == "no death in office":
 
+            leg = pers_leg[leg_col_idx]
+
             # look only at post-2000 legislatures (TODO fill in data for previous legislatures too)
-            if pers_leg[leg_col_idx] in {"2000-2004", "2004-2008", "2008-2012", "2012-2016", "2016-2020"}:
+            if leg in {"2000-2004", "2004-2008", "2008-2012", "2012-2016", "2016-2020"}:
 
                 # get names
                 surnames, given_names = pers_leg[surnames_col_idx], pers_leg[given_names_col_idx]
@@ -93,13 +96,10 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                 const, former_switcher = pers_leg[const_col_idx], pers_leg[frmr_switcher_col_idx]
                 s_party, p_switch_yr = pers_leg[s_party_col_idx], pers_leg[p_switch_yr_col_idx]
 
-                # novice = first legislature; journeyman = send; master = third or more
-                seniority_cat_dict = {1: "novice", 2: "journeyman"}
-                seniority_cat = "master"
-                if int(senior) in seniority_cat_dict:
-                    seniority_cat = seniority_cat_dict[int(senior)]
+                seniority_cat = get_seniority_cat(senior)
 
-                if s_party in party_name_changes:
+                if s_party in party_name_changes and \
+                        leg in {"2000-2004", "2004-2008", "2008-2012", "2012-2016", "2016-2020"}:
                     s_party = party_name_changes[s_party]
 
                 h_reg = historical_regions_dict[const]
@@ -117,22 +117,10 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
                     leave_early = 1 if yr == last_year_in_leg and last_month_in_leg <= 5 else 0
                     dest_party = pers_leg[dest_party_col_idx] if party_switch else ""
 
-                    # since the PP DD and UNPR fused around May 2015, any PP DD -> UNPR transfers in 2015 should not
-                    # be counted as party switches
-                    if s_party == "PP DD" and dest_party == "UPPR" and int(yr) == 2015:
-                        party_switch, p_switch_yr, dest_party = 0, '', ''
-                    # likewise for the merger between PDL and PNL in 2015; any PDL-PNL moves in 2015 aren't switches
-                    if s_party == "PDL" and dest_party == "PNL" and int(yr) == 2015:
-                        party_switch, p_switch_yr, dest_party = 0, '', ''
-                    # the Conservative Party (PC) also merged with a breakaway wing of the PNL on 19 June 2015 to
-                    # form ALDE; so any PC -> ALDE moves in 2015 are NOT switches
-                    if s_party == "PC" and dest_party == "ALDE" and int(yr) == 2015:
-                        party_switch, p_switch_yr, dest_party = 0, '', ''
-
-                    # get the rank of ther person within the PPG, relative to the daterange of the rank
-                    lower_date = int(pers_leg[rank_dates_col_ind].split("-")[0].split(".")[1])  # in MO.YR-MO.YR format
-                    upper_date = int(pers_leg[rank_dates_col_ind].split("-")[1].split(".")[1])
-                    pre_switch_rank = pers_leg[rank_col_idx] if lower_date <= yr <= upper_date else "membru"
+                    # catch and clean potential issues arising from ppg changes, like party group fusions
+                    party_switch, p_switch_yr, dest_party = ad_hoc_ppg_changes(s_party, dest_party, yr,
+                                                                               party_switch, p_switch_yr)
+                    pre_switch_rank = get_pre_switch_rank(header, pers_leg, yr)
 
                     idlgcl_switch_cost = ideological_switch_cost(s_party, dest_party, yr) if dest_party else ""
 
@@ -157,9 +145,6 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
                     pers_yr_table.append(person_year)
 
-    # add the media announcement
-    pers_yr_table = media_announcement_corruption(pers_yr_table, person_year_table_header)
-
     # add rank change column
     pers_yr_table = rank_change(pers_yr_table, person_year_table_header)
 
@@ -170,6 +155,45 @@ def make_person_year_table(person_legislature_table_path, person_year_table_out_
 
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header)
     first_switch_risk_set(pers_yr_table, risk_set_table_out_path, person_year_table_header, multi_year_only=True)
+
+
+def get_seniority_cat(senior):
+    """Map a seniority category number to a string."""
+    # novice = first legislature; journeyman = send; master = third or more
+    seniority_cat_dict = {1: "novice", 2: "journeyman"}
+    seniority_cat = "master"  # implicit category "3"
+    if int(senior) in seniority_cat_dict:
+        seniority_cat = seniority_cat_dict[int(senior)]
+    return seniority_cat
+
+
+def ad_hoc_ppg_changes(s_party, dest_party, yr, party_switch, p_switch_yr):
+    """Catches and corrects possible errors arising from party changes, fusions, etc."""
+    # since the PP DD and UNPR fused around May 2015, any PP DD -> UNPR transfers in 2015 should not
+    # be counted as party switches
+    if s_party == "PP DD" and dest_party == "UPPR" and int(yr) == 2015:
+        party_switch, p_switch_yr, dest_party = 0, '', ''
+    # likewise for the merger between PDL and PNL in 2015; any PDL-PNL moves in 2015 aren't switches
+    if s_party == "PDL" and dest_party == "PNL" and int(yr) == 2015:
+        party_switch, p_switch_yr, dest_party = 0, '', ''
+    # the Conservative Party (PC) also merged with a breakaway wing of the PNL on 19 June 2015 to
+    # form ALDE; so any PC -> ALDE moves in 2015 are NOT switches
+    if s_party == "PC" and dest_party == "ALDE" and int(yr) == 2015:
+        party_switch, p_switch_yr, dest_party = 0, '', ''
+    return party_switch, p_switch_yr, dest_party
+
+
+def get_pre_switch_rank(header, pers_leg, yr):
+    """
+    Get the PPG rank (e.g. secretary) of the legislator BEFORE they switched parties.
+    NB: if they never switched parties, this is just the rank.
+    """
+    rank_col_idx, rank_dates_col_ind = header.index("entry ppg rank"), header.index("entry ppg rank dates")
+    # get the rank of the person within the PPG, relative to the daterange of the rank
+    lower_date = int(pers_leg[rank_dates_col_ind].split("-")[0].split(".")[1])  # in MO.YR-MO.YR format
+    upper_date = int(pers_leg[rank_dates_col_ind].split("-")[1].split(".")[1])
+    pre_switch_rank = pers_leg[rank_col_idx] if lower_date <= yr <= upper_date else "membru"
+    return pre_switch_rank
 
 
 def get_ppg_size(s_party, senator, yr, legis, pool_chambers=True):
@@ -262,18 +286,6 @@ def get_convictions_data(yr, s_party):
 
     if yr in leader_conv_multi_year and s_party in leader_conv_multi_year[yr]:
         conviction_dict["lead_conv_multi_year"] = 1
-
-    if yr in min_conv_full and s_party in min_conv_full[yr]:
-        conviction_dict["min_conv_full"] = min_conv_full[yr][s_party]
-
-    if yr in min_conv_old and s_party in min_conv_old[yr]:
-        conviction_dict["min_conv_old"] = min_conv_old[yr][s_party]
-
-    if yr in min_conv_new and s_party in min_conv_new[yr]:
-        conviction_dict["min_conv_new"] = min_conv_new[yr][s_party]
-
-    if yr in min_conv_none and s_party in min_conv_none[yr]:
-        conviction_dict["min_conv_none"] = min_conv_none[yr][s_party]
 
     if yr in legis_guilty_count and s_party in legis_guilty_count[yr]:
         conviction_dict["legis_conv_full"] = legis_guilty_count[yr][s_party]
@@ -385,48 +397,6 @@ def rank_change(person_year_table, header):
                     delta_rank = "no change"
                 py_table_with_rank_change.append(pers_yr[:rank_col_idx + 1] + [delta_rank] + pers_yr[rank_col_idx + 1:])
     return py_table_with_rank_change
-
-
-def media_announcement_corruption(person_year_table, header):
-    """
-    Adds three indicator columns:
-    (a) "1" if one heard about a media piece reporting on one's putative corruption in a given calendar year
-    (b) "1" if one heard about a media piece reporting on one's putative corruption in a given calendar year and all
-        subsequent calendar years until the end of one's mandate
-    (c) "1" if one heard about a media piece reporting on one's putative corruption in a given calendar year and all
-        subsequent calendar years until the end of one's political career, i.e. when they drop out of the dataset
-
-    :param person_year_table: table of person years, as a list of lists
-    :param header: list, the table header for the person_year_table
-    :return a person-year table with three extra columns relating to media reporting
-    """
-
-    surnames_col_idx, given_names_col_idx = header.index("surnames"), header.index("given names")
-    leg_col_idx, yr_col_idx = header.index("legis"), header.index("year")
-
-    table_with_media_reporting_columns = []
-
-    for pers_year in person_year_table:
-        leg, yr = pers_year[leg_col_idx], int(pers_year[yr_col_idx])
-        fullname = pers_year[surnames_col_idx] + " " + pers_year[given_names_col_idx]
-        new_cols = [0, 0, 0]  # in this order: a, b, c (see docstring for meaning of letters)
-        if fullname in media_announcement_dict:
-            announcement_year = int(media_announcement_dict[fullname].split(".")[-1])
-
-            # for all years after the announcement, inclusive
-            if announcement_year <= yr:
-                new_cols[2] = 1
-
-            # for all years after the announcement (inclusive) until the final legislature year (inclusive)
-            if announcement_year <= yr <= int(leg.split("-")[1]):  # leg in form of "2012-2016"
-                new_cols[1] = 1
-
-            # only for the calendar year of the announcement
-            if announcement_year == yr:
-                new_cols[0] = 1
-
-        table_with_media_reporting_columns.append(pers_year + new_cols)
-    return table_with_media_reporting_columns
 
 
 def first_switch_risk_set(person_year_table, risk_set_table_out_path, header, multi_year_only=False):
